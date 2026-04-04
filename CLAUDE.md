@@ -12,23 +12,26 @@ Target prizes: Hedera AI & Agentic Payments ($6k) + ENS stretch ($5k).
 
 ```bash
 npm run build           # TypeScript type-check only (tsc --noEmit, no emit)
+
+# Initial setup (run once)
+npm run setup           # Create HCS topics + HTS token on testnet, print IDs for .env
+
+# Full demo orchestration
+npm run demo            # Run complete multi-agent flow: Requester → Workers → Judge
+
+# x402 mock server (used by demo)
 npm run x402-server     # Start mock x402 payment server on port 4020
-npm run topics:create   # Create HCS topics on testnet (run once, share IDs)
 
-# Worker
-npm run worker:mock     # Worker E2E test — no Hedera, no external deps
-npm run worker          # Worker against real Hedera testnet
-
-# Requester
-npm run requester:mock  # Requester E2E test — no Hedera
+# Individual agents (unit-testable E2E flows, no shared state)
+npm run requester:mock  # Requester E2E test — no Hedera, no external deps
 npm run requester       # Requester against real Hedera testnet
-
-# Judge
-npm run judge:mock      # Judge E2E test — no Hedera, no Anthropic key
-npm run judge           # Judge against real Hedera testnet + Claude API
+npm run worker:mock     # Worker E2E test — no Hedera, no external deps
+npm run worker          # Worker against real Hedera testnet (x402 payment flow)
+npm run judge:mock      # Judge E2E test — no Hedera, no LLM API key required
+npm run judge           # Judge against real Hedera testnet
 ```
 
-> No test runner is configured. `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E test with assertions that exits 0 on success.
+> No test runner is configured. `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E test with assertions that exits 0 on success. The `demo` script orchestrates all agents and services in one process.
 
 ## Architecture
 
@@ -36,28 +39,33 @@ npm run judge           # Judge against real Hedera testnet + Claude API
 
 | Agent | File | Responsibility |
 |---|---|---|
-| Requester | `src/agents/requester.ts` | Posts bounties on HCS, collects bids (up to `maxBidsToAccept`), locks HBAR in escrow via Hedera Scheduled Transaction |
-| Worker | `src/agents/worker.ts` | Discovers bounties on HCS, bids, fetches BTC price via x402, posts result |
-| Judge | `src/agents/judge.ts` | Monitors results, calls Claude to pick winner, posts verdict, signs escrow to release HBAR |
+| Requester | `src/agents/requester.ts` | Posts bounties on HCS, collects bids (up to `maxBidsToAccept`), locks HBAR in escrow via Hedera Scheduled Transaction, submits token transfer to Judge for payment release |
+| Worker | `src/agents/worker.ts` | Discovers bounties on HCS, bids, fetches BTC price via x402, posts result. (See `gemini-worker.ts` for LLM-powered variant using Hedera Agent Kit.) |
+| Judge | `src/agents/judge.ts` | Monitors results, evaluates submissions, posts verdict, signs escrow to release HBAR. Uses configurable LLM provider: hardcoded deterministic algorithm (default, no API key) or Claude API. |
 
 ### Full Task Lifecycle
 
 ```
 Requester → [HCS: bounties] → Workers discover
 Workers   → [HCS: bids]     → Requester collects N bids → creates Hedera Scheduled TX (escrow)
-Workers   → [HCS: results]  → Judge collects, debounces resultsWaitMs, calls Claude
-Judge     → [HCS: verdicts] → posts winner; signs Scheduled TX → HBAR released on-chain
+Workers   → [HCS: results]  → Judge collects, debounces resultsWaitMs, evaluates (via LLM or deterministic)
+Judge     → [HCS: verdicts] → posts winner; executes HTS token transfer to winner; signs Scheduled TX
+          → [HBAR released] → on-chain to winner's account
 ```
 
-**Critical gap:** The Worker does NOT wait for bid acceptance before executing the task. It bids and immediately fetches the price. All workers that bid will submit results; the Judge picks the winner among submitted results.
+**Critical behavior:** The Worker does NOT wait for bid acceptance before executing the task. It bids and immediately fetches the price (via x402 or Gemini). All workers that bid will submit results; the Judge picks the winner among submitted results.
 
 ### Services Layer (`src/services/`)
 
 - **`hcs.ts`** — `HCSService` (real Hedera) and `MockHCSService` (in-memory). Both implement `IHCSService`. Use `MockHCSService.simulateMessage()` to inject test messages; `getPublished()` for assertions.
 - **`escrow.ts`** — `EscrowService` wraps Hedera `ScheduleCreateTransaction` (locks HBAR without executing) and `ScheduleSignTransaction` (releases on Judge signature). `MockEscrowService` is in-memory with `isReleased()` for assertions.
-- **`llm.ts`** — `LLMService` calls Claude (`claude-haiku-4-5-20251001`) with structured JSON output to pick a winner. Falls back to `MockLLMService` on parse error. `MockLLMService` uses a deterministic algorithm: most sources wins, then lowest price variance.
+- **`hts.ts`** — Hedera Token Service: token association (required before workers can receive HIVE tokens) and token transfer (Judge releases reward to winning Worker).
+- **`llm.ts`** — Judge decision-making. Configurable via `LLM_PROVIDER` env: `hardcoded` uses deterministic algorithm (most sources wins, then lowest price variance); `claude` calls Claude API. `MockLLMService` provides deterministic fallback.
+- **`llm-judge.ts`** — Alternative Judge implementation integrating with `llm.ts` service layer for structured evaluation.
 - **`x402-client.ts`** — `fetchWithPayment()` implements the x402 protocol: initial request → 402 → parse `X-Payment-Required` header → sign → retry with `X-Payment` header. Headers are base64-encoded JSON.
 - **`price-fetcher.ts`** — Fetches BTC price from CoinGecko, Kraken, and Binance in parallel. Requires ≥2 successful sources.
+- **`gemini-worker.ts`** — Worker variant powered by Google Gemini 2.5 Flash + Hedera Agent Kit for autonomous task execution (requires `GEMINI_API_KEY`).
+- **`logger.ts`** — Winston-based structured logging for all agents and services.
 
 ### x402 Mock Server (`src/x402-mock-server/server.ts`)
 
@@ -79,23 +87,56 @@ HCS message contracts: `BountyMessage`, `BidMessage`, `ResultMessage`, `VerdictM
 
 ## Environment Setup
 
-Copy `.env.example` to `.env`:
+1. Copy `.env.example` to `.env`
+2. Fill in operator account: `HEDERA_ACCOUNT_ID` / `HEDERA_PRIVATE_KEY`
+3. Run `npm run setup` — creates HCS topics and HTS token, prints IDs
+4. Copy output into `.env`: `HCS_*_TOPIC_ID` and `HTS_TOKEN_ID`
 
+**Optional agent accounts** (default to operator):
 ```
-HEDERA_ACCOUNT_ID / HEDERA_PRIVATE_KEY       # operator account
-WORKER_ACCOUNT_ID / WORKER_PRIVATE_KEY        # worker-specific account
-REQUESTER_ACCOUNT_ID / REQUESTER_PRIVATE_KEY  # requester-specific account
-JUDGE_ACCOUNT_ID / JUDGE_PRIVATE_KEY          # judge-specific account
-ANTHROPIC_API_KEY                             # for real Judge (LLMService)
-HCS_BOUNTY_TOPIC_ID / HCS_BID_TOPIC_ID / HCS_RESULT_TOPIC_ID / HCS_VERDICT_TOPIC_ID
-X402_SERVER_URL      # defaults to http://localhost:4020
-RESULTS_WAIT_MS      # Judge debounce window, defaults to 30000
+WORKER_ACCOUNT_ID / WORKER_PRIVATE_KEY
+REQUESTER_ACCOUNT_ID / REQUESTER_PRIVATE_KEY
+JUDGE_ACCOUNT_ID / JUDGE_PRIVATE_KEY
 ```
+
+**LLM configuration**:
+```
+LLM_PROVIDER=hardcoded         # (default) deterministic algorithm, no API key needed
+LLM_PROVIDER=claude            # uses Claude API
+ANTHROPIC_API_KEY=sk-ant-...   # for claude provider
+ANTHROPIC_MODEL=claude-sonnet-4-6  # (optional) defaults to claude-haiku-4-5-20251001
+```
+
+**Worker LLM (Gemini variant)**:
+```
+GEMINI_API_KEY=AIzaSy...       # for gemini-worker.ts with Hedera Agent Kit
+```
+
+**Other**:
+```
+X402_SERVER_URL=http://localhost:4020    # x402 mock server, set port via X402_SERVER_PORT
+RESULTS_WAIT_MS=30000                    # Judge debounce window, defaults to 30000
+```
+
+## Testing
+
+Agents are fully testable via dependency injection — all use mocks for services. Each `*:mock.ts` runs self-contained E2E assertions:
+
+```bash
+npm run worker:mock     # Tests Worker E2E flow (discovery → bid → fetch price → result)
+npm run requester:mock  # Tests Requester E2E flow (post bounty → collect bids → escrow)
+npm run judge:mock      # Tests Judge E2E flow (collect results → evaluate → verdict)
+```
+
+No test runner configured; assertions are inline assertions in `*:mock.ts` files. Exit code 0 = success, non-zero = failure.
 
 ## Key Design Decisions
 
 - **ES Modules**: `"type": "module"` in package.json. All imports must use `.js` extensions (e.g., `../types/index.js`) even for `.ts` source files — required by NodeNext module resolution.
 - **Agents check `import.meta.url` vs `process.argv[1]`** to detect direct execution — the ESM equivalent of `if __name__ == '__main__'`.
-- **x402 is mocked on Hedera**: The protocol is simulated (real x402 targets EVM chains). The mock demonstrates the payment choreography; this distinction should be documented for judges.
+- **Dependency injection pattern**: All agents and services accept injected dependencies, enabling full testability without Hedera or API calls. The CLI entrypoint wires real services; `*-mock.ts` files wire mocks.
+- **Dual Worker implementations**: Standard `worker.ts` uses x402 payment protocol; `gemini-worker.ts` uses Google Gemini 2.5 Flash with Hedera Agent Kit for autonomous execution.
+- **Configurable Judge evaluation**: `LLM_PROVIDER` env controls verdict logic: `hardcoded` (deterministic, no API key) or `claude` (uses Claude API).
+- **x402 is mocked on Hedera**: Real x402 targets EVM chains. The mock on Hedera demonstrates payment choreography and protocol flow.
 - **Judge uses debounce, not a fixed count**: The `resultsWaitMs` timer resets on each new result, so the Judge evaluates `resultsWaitMs` after the *last* result arrives, not after a fixed number.
-- **Escrow recipient is the first bidder as placeholder**: The Scheduled TX is created pointing to worker 1's address, but the actual HBAR flows to whoever the Judge designates at signing time.
+- **Escrow & payment flow**: Requester creates Hedera Scheduled TX to lock HBAR (without execution). Judge then executes HTS token transfer to winner, then signs Scheduled TX to release HBAR on-chain. Actual payment recipient can differ from escrow recipient.
