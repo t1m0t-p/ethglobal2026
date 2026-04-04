@@ -81,7 +81,10 @@ export class GeminiWorkerService implements IGeminiWorkerService {
           tools?: string[];
           context?: { mode: string; accountId: string };
         };
-      }) => { getTools(): unknown[] };
+      }) => {
+        getTools(): unknown[];
+        getHederaAgentKitAPI(): unknown;
+      };
       AgentMode: { AUTONOMOUS: string };
     };
     const { Client, AccountId, PrivateKey } = await import("@hashgraph/sdk");
@@ -94,7 +97,7 @@ export class GeminiWorkerService implements IGeminiWorkerService {
       PrivateKey.fromStringDer(this.hederaPrivateKey),
     );
 
-    // ── Hedera Agent Kit — outils HCS disponibles pour Gemini ──
+    // ── Hedera Agent Kit — initialisation avec tous les tools HCS ──
     const toolkit = new HederaLangchainToolkit({
       client: hederaClient,
       configuration: {
@@ -105,7 +108,54 @@ export class GeminiWorkerService implements IGeminiWorkerService {
         },
       },
     });
-    const hederaTools = toolkit.getTools();
+
+    // L'API interne du kit expose submitTopicMessage, getTopicMessages, etc.
+    const kitApi = toolkit.getHederaAgentKitAPI() as {
+      submitTopicMessage(params: { topicId: string; message: string }): Promise<unknown>;
+      getTopicMessages(params: { topicId: string }): Promise<unknown>;
+    };
+
+    // ── Wrapper tools avec schemas Gemini-compatibles (pas de type[] ni anyOf) ──
+    // toolkit.getTools() produit des schemas Zod avec .optional() → "type":["x","null"]
+    // que Gemini rejette. On crée des wrappers avec z.object() simple et on délègue au kit.
+
+    const hcsPublishTool = tool(
+      async (input: { topicId: string; message: string }): Promise<string> => {
+        console.log(`[gemini-worker] hcs_publish_message → topic ${input.topicId}`);
+        const result = await kitApi.submitTopicMessage({
+          topicId: input.topicId,
+          message: input.message,
+        });
+        return JSON.stringify(result ?? { success: true });
+      },
+      {
+        name: "hcs_publish_message",
+        description:
+          "Publish a message to a Hedera Consensus Service (HCS) topic. " +
+          "Use this to broadcast data on Hedera.",
+        schema: z.object({
+          topicId: z.string().describe("HCS topic ID, e.g. '0.0.12345'"),
+          message: z.string().describe("Message content to publish"),
+        }),
+      },
+    );
+
+    const hcsQueryTool = tool(
+      async (input: { topicId: string }): Promise<string> => {
+        console.log(`[gemini-worker] hcs_query_messages → topic ${input.topicId}`);
+        const result = await kitApi.getTopicMessages({ topicId: input.topicId });
+        return JSON.stringify(result ?? []);
+      },
+      {
+        name: "hcs_query_messages",
+        description:
+          "Query recent messages from a Hedera Consensus Service (HCS) topic. " +
+          "Returns an array of messages.",
+        schema: z.object({
+          topicId: z.string().describe("HCS topic ID to query, e.g. '0.0.12345'"),
+        }),
+      },
+    );
 
     // ── Tool custom : fetch BTC prix via x402 ──
     const x402PaymentSigner = this.paymentSigner;
@@ -142,8 +192,7 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     });
 
     // ── Agent ReAct ──
-    // hederaTools est un tableau de StructuredTool compatibles LangChain
-    const allTools = [x402Tool, ...(hederaTools as object[])] as Parameters<typeof createReactAgent>[0]["tools"];
+    const allTools = [x402Tool, hcsPublishTool, hcsQueryTool] as Parameters<typeof createReactAgent>[0]["tools"];
     const agent = createReactAgent({ llm, tools: allTools });
 
     const systemPrompt =
