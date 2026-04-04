@@ -2,37 +2,30 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faRocket, faBook } from '@fortawesome/free-solid-svg-icons'
 
 const teamMembers = [
-  { name: 'Antoine', github: 'Antoine0703' },
-  { name: 'Ewan', github: 'PHILIPPEEwan' },
-  { name: 'Manmohit', github: 'Manmohit509' },
-  { name: 'Timothée', github: 't1m0t-p' },
+  { name: 'Antoine',   github: 'Antoine0703'  },
+  { name: 'Ewan',      github: 'PHILIPPEEwan' },
+  { name: 'Manmohit',  github: 'Manmohit509'  },
+  { name: 'Timothée',  github: 't1m0t-p'      },
 ]
 
-// Background hexagon decoration
 function HexBg() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {[
-        { w: 140, top: '-10%', left: '5%', opacity: 0.12 },
-        { w: 90, top: '20%', right: '8%', opacity: 0.1 },
-        { w: 60, bottom: '10%', left: '15%', opacity: 0.08 },
+        { w: 140, top: '-10%', left: '5%',  opacity: 0.12 },
+        { w: 90,  top: '20%',  right: '8%', opacity: 0.10 },
+        { w: 60,  bottom: '10%', left: '15%', opacity: 0.08 },
         { w: 200, bottom: '-15%', right: '-5%', opacity: 0.07 },
-        { w: 50, top: '50%', left: '40%', opacity: 0.06 },
+        { w: 50,  top: '50%',  left: '40%', opacity: 0.06 },
       ].map((hex, i) => (
         <div
           key={i}
           className="absolute hex-flat bg-white"
-          style={{
-            width: hex.w,
-            height: hex.w,
-            top: hex.top,
-            left: hex.left,
-            right: hex.right,
-            bottom: hex.bottom,
-            opacity: hex.opacity,
-          } as React.CSSProperties}
+          style={{ width: hex.w, height: hex.w, ...hex } as React.CSSProperties}
         />
       ))}
     </div>
@@ -45,7 +38,6 @@ export default function FooterCTA() {
 
   return (
     <footer>
-      {/* CTA Section */}
       <section
         ref={ref}
         className="relative py-28 overflow-hidden"
@@ -87,7 +79,7 @@ export default function FooterCTA() {
             </p>
           </motion.div>
 
-          {/* CTA */}
+          {/* CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -98,16 +90,18 @@ export default function FooterCTA() {
               href="https://github.com/t1m0t-p/ethglobal2026"
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-white text-charcoal font-extrabold px-8 py-4 rounded-full text-sm hover:scale-105 active:scale-95 transition-transform shadow-lg"
+              className="inline-flex items-center gap-2.5 bg-white text-charcoal font-extrabold px-8 py-4 rounded-full text-sm hover:scale-105 active:scale-95 transition-transform shadow-lg"
             >
-              🚀 Launch the Hive
+              <FontAwesomeIcon icon={faRocket} className="w-4 h-4" />
+              Launch the Hive
             </a>
             <a
               href="https://github.com/t1m0t-p/ethglobal2026#readme"
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-white/10 border border-white/30 text-white font-bold px-8 py-4 rounded-full text-sm hover:bg-white/20 hover:scale-105 active:scale-95 transition-all"
+              className="inline-flex items-center gap-2.5 bg-white/10 border border-white/30 text-white font-bold px-8 py-4 rounded-full text-sm hover:bg-white/20 hover:scale-105 active:scale-95 transition-all"
             >
+              <FontAwesomeIcon icon={faBook} className="w-4 h-4" />
               Read the docs
             </a>
           </motion.div>
@@ -140,7 +134,6 @@ export default function FooterCTA() {
             ))}
           </motion.div>
 
-          {/* Hackathon tag */}
           <motion.p
             initial={{ opacity: 0 }}
             animate={inView ? { opacity: 1 } : {}}
@@ -152,7 +145,6 @@ export default function FooterCTA() {
         </div>
       </section>
 
-      {/* Bottom bar */}
       <div className="bg-charcoal py-5 px-6">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-white/30 font-semibold">
           <span>© 2026 Hivera — PoC Innovation</span>

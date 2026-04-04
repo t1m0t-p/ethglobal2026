@@ -2,6 +2,8 @@
 
 import { motion, useInView, useMotionValue, useTransform, animate } from 'framer-motion'
 import { useEffect, useRef } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faBolt, faCoins, faLock, faXmark } from '@fortawesome/free-solid-svg-icons'
 
 function CountUp({
   value, prefix = '', suffix = '', decimals = 0, start,
@@ -26,7 +28,7 @@ function CountUp({
 
 const cards = [
   {
-    icon: '⚡',
+    icon: faBolt,
     tag: 'Speed',
     tagColor: '#4A9F7A',
     stat: { value: 3, suffix: 's' },
@@ -35,7 +37,7 @@ const cards = [
     vs: 'EVM chains: 12–60s finality',
   },
   {
-    icon: '💸',
+    icon: faCoins,
     tag: 'Cost',
     tagColor: '#6AAF8A',
     stat: { value: 0.0001, prefix: '$', decimals: 4 },
@@ -44,7 +46,7 @@ const cards = [
     vs: 'Centralised infra: $10k+/month',
   },
   {
-    icon: '🔒',
+    icon: faLock,
     tag: 'Trust',
     tagColor: '#8BBF9F',
     stat: { value: 100, suffix: '%' },
@@ -66,9 +68,13 @@ function FeatureCard({ card, index, start }: { card: typeof cards[0]; index: num
       transition={{ duration: 0.55, delay: index * 0.1, type: 'spring', stiffness: 140 }}
       className="flex flex-col gap-4 p-6 rounded-2xl bg-white border border-charcoal/6 hover:border-mint/50 hover:shadow-md transition-all hover:-translate-y-0.5"
     >
-      {/* Icon + tag */}
       <div className="flex items-center justify-between">
-        <span className="text-3xl">{card.icon}</span>
+        <div
+          className="w-10 h-10 flex items-center justify-center rounded-xl"
+          style={{ background: `${card.tagColor}15` }}
+        >
+          <FontAwesomeIcon icon={card.icon} className="w-4 h-4" style={{ color: card.tagColor }} />
+        </div>
         <span
           className="text-[10px] font-bold px-2.5 py-1 rounded-full"
           style={{ background: `${card.tagColor}18`, color: card.tagColor }}
@@ -77,18 +83,15 @@ function FeatureCard({ card, index, start }: { card: typeof cards[0]; index: num
         </span>
       </div>
 
-      {/* Stat */}
       <div className="text-4xl font-extrabold leading-none" style={{ color: '#4A9F7A' }}>
         <CountUp {...card.stat} start={start} />
       </div>
 
-      {/* Title + description */}
       <h3 className="text-base font-extrabold text-charcoal leading-snug">{card.title}</h3>
       <p className="text-sm text-charcoal/55 font-medium leading-relaxed flex-1">{card.description}</p>
 
-      {/* VS pill */}
       <div className="flex items-center gap-2 text-[11px] font-semibold text-charcoal/35 border-t border-charcoal/5 pt-3 mt-auto">
-        <span className="text-red-300 font-bold">✕</span>
+        <FontAwesomeIcon icon={faXmark} className="w-3 h-3 text-red-300" />
         {card.vs}
       </div>
     </motion.div>
@@ -104,8 +107,6 @@ export default function Stats() {
   return (
     <section id="why" className="py-24 lg:py-32 bg-cream">
       <div className="max-w-6xl mx-auto px-6">
-
-        {/* Header */}
         <motion.div
           ref={titleRef}
           initial={{ opacity: 0, y: 16 }}
@@ -124,13 +125,11 @@ export default function Stats() {
           </p>
         </motion.div>
 
-        {/* Cards */}
         <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {cards.map((card, i) => (
             <FeatureCard key={card.title} card={card} index={i} start={cardsInView} />
           ))}
         </div>
-
       </div>
     </section>
   )

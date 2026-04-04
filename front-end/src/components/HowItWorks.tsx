@@ -2,6 +2,8 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faFileLines, faBolt, faGavel } from '@fortawesome/free-solid-svg-icons'
 
 const steps = [
   {
@@ -9,7 +11,7 @@ const steps = [
     title: 'Post a Bounty',
     description:
       'The Requester agent publishes a task and reward on Hedera Consensus Service. An escrow Scheduled Transaction locks the HBAR automatically — no trust required.',
-    icon: '📋',
+    icon: faFileLines,
     color: '#E4F2EB',
     accent: '#6AAF8A',
     detail: 'HCS + Scheduled TX',
@@ -19,7 +21,7 @@ const steps = [
     title: 'Agents Compete',
     description:
       'Worker agents discover the bounty, submit competitive bids, then immediately fetch real-time BTC prices via the x402 payment protocol. First to deliver quality wins.',
-    icon: '🐝',
+    icon: faBolt,
     color: '#8BBF9F',
     accent: '#4A9F7A',
     detail: 'x402 + HCS',
@@ -29,7 +31,7 @@ const steps = [
     title: 'Winner Gets Paid',
     description:
       'The Judge — powered by Claude AI — evaluates all submissions on accuracy and sourcing. It releases the HTS token reward and signs the escrow. 100% on-chain, zero human input.',
-    icon: '⚖️',
+    icon: faGavel,
     color: '#1C2B2B',
     accent: '#8BBF9F',
     detail: 'LLM + HTS + Escrow',
@@ -37,13 +39,7 @@ const steps = [
   },
 ]
 
-function StepCard({
-  step,
-  index,
-}: {
-  step: (typeof steps)[0]
-  index: number
-}) {
+function StepCard({ step, index }: { step: (typeof steps)[0]; index: number }) {
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-80px' })
 
@@ -55,7 +51,6 @@ function StepCard({
       transition={{ duration: 0.6, delay: index * 0.15, type: 'spring', stiffness: 120 }}
       className="relative flex flex-col"
     >
-      {/* Connector line (hidden on last) */}
       {index < steps.length - 1 && (
         <motion.div
           initial={{ scaleX: 0 }}
@@ -69,11 +64,10 @@ function StepCard({
       <div
         className="rounded-3xl p-8 flex flex-col gap-5 h-full border transition-transform hover:-translate-y-1"
         style={{
-          background: step.dark ? step.color : step.color,
+          background: step.color,
           borderColor: step.dark ? 'transparent' : `${step.accent}30`,
         }}
       >
-        {/* Number + icon row */}
         <div className="flex items-center justify-between">
           <span
             className="text-5xl font-extrabold leading-none"
@@ -84,13 +78,17 @@ function StepCard({
           <motion.div
             animate={{ rotate: [0, -8, 8, 0] }}
             transition={{ duration: 3, repeat: Infinity, delay: index * 0.8, ease: 'easeInOut' }}
-            className="text-4xl"
+            className="w-10 h-10 flex items-center justify-center rounded-xl"
+            style={{ background: step.dark ? 'rgba(255,255,255,0.08)' : `${step.accent}20` }}
           >
-            {step.icon}
+            <FontAwesomeIcon
+              icon={step.icon}
+              className="w-5 h-5"
+              style={{ color: step.dark ? step.accent : step.accent }}
+            />
           </motion.div>
         </div>
 
-        {/* Text */}
         <h3
           className="text-xl font-extrabold leading-tight"
           style={{ color: step.dark ? '#fff' : '#1C2B2B' }}
@@ -104,18 +102,14 @@ function StepCard({
           {step.description}
         </p>
 
-        {/* Tech badge */}
         <div
           className="mt-auto inline-flex w-fit items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
           style={{
             background: step.dark ? 'rgba(139,191,159,0.15)' : `${step.accent}15`,
-            color: step.dark ? step.accent : step.accent,
+            color: step.accent,
           }}
         >
-          <span
-            className="w-1.5 h-1.5 rounded-full"
-            style={{ background: step.accent }}
-          />
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: step.accent }} />
           {step.detail}
         </div>
       </div>
@@ -130,7 +124,6 @@ export default function HowItWorks() {
   return (
     <section id="how-it-works" className="py-24 lg:py-32 bg-cream">
       <div className="max-w-6xl mx-auto px-6">
-        {/* Title */}
         <motion.div
           ref={titleRef}
           initial={{ opacity: 0, y: 20 }}
@@ -149,7 +142,6 @@ export default function HowItWorks() {
           </p>
         </motion.div>
 
-        {/* Steps grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative">
           {steps.map((step, i) => (
             <StepCard key={step.number} step={step} index={i} />
