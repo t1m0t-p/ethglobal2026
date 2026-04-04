@@ -47,6 +47,41 @@ export interface PriceData {
 }
 
 // ──────────────────────────────────────────────
+// x402 Protocol Types
+// ──────────────────────────────────────────────
+
+export interface X402PaymentRequirements {
+  x402Version: number;
+  accepts: X402AcceptedPayment[];
+}
+
+export interface X402AcceptedPayment {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: string;
+}
+
+export interface X402PaymentPayload {
+  x402Version: number;
+  scheme: string;
+  payload: {
+    signature: string;
+    transactionId?: string;
+  };
+}
+
+export interface X402PaymentResponse {
+  success: boolean;
+  transactionId: string;
+}
+
+export type PaymentSigner = (
+  requirements: X402PaymentRequirements,
+) => Promise<X402PaymentPayload>;
+
+// ──────────────────────────────────────────────
 // Worker State Machine
 // ──────────────────────────────────────────────
 
