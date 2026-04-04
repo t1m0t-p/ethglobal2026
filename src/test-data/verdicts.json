@@ -1,0 +1,16 @@
+[
+  {
+    "type": "verdict",
+    "taskId": "btc-price-fetch-001",
+    "winnerId": "0.0.55555",
+    "reason": "Most accurate price average with lowest divergence from historical mean",
+    "paymentAmount": 100
+  },
+  {
+    "type": "verdict",
+    "taskId": "btc-price-fetch-002",
+    "winnerId": "0.0.66666",
+    "reason": "Faster response time and verifiable data points",
+    "paymentAmount": 150
+  }
+]

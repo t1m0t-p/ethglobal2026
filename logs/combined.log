@@ -1,0 +1,20 @@
+[2026-04-04 10:54:26] [32minfo[39m: Starting AgentBazaar Demo Orchestration
+[2026-04-04 10:54:26] [32minfo[39m: Stage 1: Posting Bounty
+[2026-04-04 10:54:26] [32minfo[39m: Stage 2: Collecting Bids
+[2026-04-04 10:54:26] [32minfo[39m: Stage 3: Worker Execution
+[2026-04-04 10:54:26] [32minfo[39m: Stage 4: Judge Verdict & Payment
+[2026-04-04 10:54:26] [32minfo[39m: AgentBazaar execution finished
+[2026-04-04 11:55:57] [32minfo[39m: JudgeMock: Evaluating 2 results
+[2026-04-04 11:55:57] [32minfo[39m: JudgeMock: Evaluating 0 results
+[2026-04-04 11:56:03] [32minfo[39m: Starting Hivera Demo Orchestration (Day 2 Step 2)
+[2026-04-04 11:56:03] [32minfo[39m: Stage 1: Posting Bounty
+[2026-04-04 11:56:03] [32minfo[39m: RequesterMock: Posting bounty for btc-price-fetch-001
+[2026-04-04 11:56:03] [32minfo[39m: Stage 2: Collecting Bids
+[2026-04-04 11:56:03] [32minfo[39m: Stage 3: Worker Execution
+[2026-04-04 11:56:03] [32minfo[39m: Stage 4: Judge Verdict & Payment
+[2026-04-04 11:56:03] [32minfo[39m: JudgeMock: Evaluating 2 results
+[2026-04-04 11:56:04] [32minfo[39m: Hivera execution finished
+[2026-04-04 11:57:23] [32minfo[39m: Starting Hivera Demo Orchestration (Day 2 Step 2)
+[2026-04-04 11:57:23] [32minfo[39m: RequesterMock: Posting bounty for btc-price-fetch-001
+[2026-04-04 11:57:23] [32minfo[39m: JudgeMock: Evaluating 2 results
+[2026-04-04 11:57:24] [32minfo[39m: Hivera execution finished
