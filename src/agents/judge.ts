@@ -2,6 +2,7 @@ import type {
   IHCSService,
   TopicIds,
   BountyMessage,
+  BidMessage,
   ResultMessage,
   VerdictMessage,
   HCSMessage,
@@ -34,6 +35,7 @@ export class JudgeAgent {
 
   // Per-task collections — Judge can handle multiple bounties sequentially
   private pendingResults: Map<string, ResultMessage[]> = new Map();
+  private pendingBids: Map<string, BidMessage[]> = new Map();
   private activeBounties: Map<string, BountyMessage> = new Map();
   private evaluationTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private escrowMap: Map<string, EscrowInfo> = new Map();
@@ -87,6 +89,7 @@ export class JudgeAgent {
       clearTimeout(timer);
     }
     this.pendingResults.clear();
+    this.pendingBids.clear();
     this.activeBounties.clear();
     this.evaluationTimers.clear();
     this.escrowMap.clear();
@@ -106,10 +109,17 @@ export class JudgeAgent {
 
     this.transition(JudgeState.MONITORING);
 
-    // Subscribe to bounties to capture task descriptions for LLM context
+    // Subscribe to bounties to capture task descriptions + strategy for LLM context
     await this.hcs.subscribe(this.topicIds.bounties, (message: HCSMessage) => {
       if (message.type === "bounty") {
         this.handleBounty(message);
+      }
+    });
+
+    // Subscribe to bids to track bid amounts (needed for price-mode evaluation)
+    await this.hcs.subscribe(this.topicIds.bids, (message: HCSMessage) => {
+      if (message.type === "bid") {
+        this.handleBid(message);
       }
     });
 
@@ -131,6 +141,17 @@ export class JudgeAgent {
     this.activeBounties.set(bounty.taskId, bounty);
     console.log(
       `[judge:${this.accountId}] Tracking bounty ${bounty.taskId} — "${bounty.description}"`,
+    );
+  }
+
+  // ── Bid handling — track for price-mode evaluation ──
+
+  private handleBid(bid: BidMessage): void {
+    const existing = this.pendingBids.get(bid.taskId) ?? [];
+    existing.push(bid);
+    this.pendingBids.set(bid.taskId, existing);
+    console.log(
+      `[judge:${this.accountId}] Tracking bid from ${bid.workerId} for ${bid.taskId} — ${bid.bidAmount} HBAR`,
     );
   }
 
@@ -190,10 +211,13 @@ export class JudgeAgent {
     );
 
     // Call LLM (or mock) to pick a winner
+    const bids = this.pendingBids.get(taskId) ?? [];
     const evaluation = await this.llmService.evaluate(
       taskId,
       bounty?.description ?? "Fetch BTC price from multiple sources",
       results,
+      bids,
+      bounty?.strategy,
     );
 
     // Build verdict message

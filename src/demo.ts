@@ -121,6 +121,8 @@ async function main(): Promise<void> {
     description: "Fetch BTC/USD price from 3 independent sources and return the average",
     reward: 100,
     deadline,
+    strategy: "quality" as const,
+    category: "crypto-price" as const,
   };
 
   // ── Requester posts bounty ────────────────────────────────────────────────────

@@ -22,6 +22,8 @@ const MOCK_BOUNTY_PARAMS: Omit<BountyMessage, "type" | "requesterAddress"> = {
   description: "Fetch BTC price from 3 sources, return average",
   reward: 100,
   deadline: new Date(Date.now() + 60_000).toISOString(), // 1 minute from now
+  strategy: "quality",
+  category: "crypto-price",
 };
 
 const MOCK_BID_1: BidMessage = {
@@ -81,6 +83,14 @@ async function runMockTest(): Promise<void> {
   assert(
     bounty.type === "bounty" && bounty.requesterAddress === REQUESTER_ID,
     "Bounty has correct requesterAddress",
+  );
+  assert(
+    bounty.type === "bounty" && bounty.strategy === "quality",
+    "Bounty has correct strategy",
+  );
+  assert(
+    bounty.type === "bounty" && bounty.category === "crypto-price",
+    "Bounty has correct category",
   );
 
   // Step 4: Simulate 2 bids arriving via HCS
