@@ -117,3 +117,31 @@ export interface TopicIds {
   results: string;
   verdicts: string;
 }
+
+// ──────────────────────────────────────────────
+// Requester State Machine
+// ──────────────────────────────────────────────
+
+export enum RequesterState {
+  IDLE = "IDLE",
+  POSTING = "POSTING",
+  AWAITING_BIDS = "AWAITING_BIDS",
+  ESCROWING = "ESCROWING",
+  AWAITING_RESULTS = "AWAITING_RESULTS",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
+
+// ──────────────────────────────────────────────
+// Judge State Machine
+// ──────────────────────────────────────────────
+
+export enum JudgeState {
+  IDLE = "IDLE",
+  MONITORING = "MONITORING",
+  EVALUATING = "EVALUATING",
+  POSTING_VERDICT = "POSTING_VERDICT",
+  RELEASING = "RELEASING",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
