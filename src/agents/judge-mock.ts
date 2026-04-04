@@ -1,4 +1,4 @@
-import type { BountyMessage, ResultMessage, VerdictMessage, TopicIds } from "../types/index.js";
+import type { BountyMessage, BidMessage, ResultMessage, VerdictMessage, TopicIds } from "../types/index.js";
 import { JudgeState } from "../types/index.js";
 import { MockHCSService } from "../services/hcs.js";
 import { MockEscrowService, type EscrowInfo } from "../services/escrow.js";
@@ -25,6 +25,8 @@ const MOCK_BOUNTY: BountyMessage = {
   reward: 100,
   deadline: new Date(Date.now() + 60_000).toISOString(),
   requesterAddress: "0.0.MOCK_REQUESTER",
+  strategy: "quality",
+  category: "crypto-price",
 };
 
 // Worker 1: 3 sources, tight variance — should WIN
@@ -199,9 +201,96 @@ async function waitForState(
   console.log(`  ✓ Judge reached state: ${target}`);
 }
 
+// ──────────────────────────────────────────────
+// Price Mode Test — cheapest bidder should win
+// ──────────────────────────────────────────────
+
+async function runPriceModeTest(): Promise<void> {
+  console.log("\n═══════════════════════════════════════════");
+  console.log("  AgentBazaar — Judge Price-Mode Test");
+  console.log("═══════════════════════════════════════════\n");
+
+  const mockHCS = new MockHCSService();
+  const mockEscrow = new MockEscrowService();
+  const mockLLM = new MockLLMService();
+
+  const judge = new JudgeAgent({
+    accountId: JUDGE_ID,
+    hcsService: mockHCS,
+    topicIds: MOCK_TOPIC_IDS,
+    llmService: mockLLM,
+    escrowService: mockEscrow,
+    resultsWaitMs: RESULTS_WAIT_MS,
+  });
+
+  await judge.start();
+
+  const priceBounty: BountyMessage = {
+    type: "bounty",
+    taskId: "price-mode-001",
+    description: "Find cheapest delivery rate Paris→Berlin",
+    reward: 80,
+    deadline: new Date(Date.now() + 60_000).toISOString(),
+    requesterAddress: "0.0.MOCK_REQUESTER",
+    strategy: "price",
+    category: "delivery",
+  };
+
+  const escrow: EscrowInfo = {
+    scheduleId: "0.0.MOCK_SCHEDULE_PRICE",
+    taskId: "price-mode-001",
+    amount: 80,
+    recipientAddress: "0.0.MOCK_WORKER_1",
+  };
+
+  judge.setEscrowInfo(priceBounty.taskId, escrow);
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bounties, priceBounty);
+
+  // Simulate bids — Worker 2 is cheaper
+  const bid1: BidMessage = { type: "bid", taskId: "price-mode-001", workerId: "0.0.MOCK_WORKER_1", bidAmount: 50, estimatedTime: "30s" };
+  const bid2: BidMessage = { type: "bid", taskId: "price-mode-001", workerId: "0.0.MOCK_WORKER_2", bidAmount: 30, estimatedTime: "25s" };
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, bid1);
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, bid2);
+
+  // Worker 1 has better quality (3 sources), Worker 2 has cheaper bid (2 sources)
+  const result1: ResultMessage = {
+    type: "result", taskId: "price-mode-001", workerId: "0.0.MOCK_WORKER_1",
+    data: { sources: ["coingecko", "kraken", "binance"], prices: [84200, 84195, 84205], average: 84200 },
+  };
+  const result2: ResultMessage = {
+    type: "result", taskId: "price-mode-001", workerId: "0.0.MOCK_WORKER_2",
+    data: { sources: ["coingecko", "kraken"], prices: [84100, 84350], average: 84225 },
+  };
+
+  console.log("▶ Simulating bids + results (Worker 2 has cheaper bid)...");
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.results, result1);
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.results, result2);
+
+  await new Promise((r) => setTimeout(r, RESULTS_WAIT_MS + 200));
+  await waitForState(judge, JudgeState.COMPLETED, 5_000);
+
+  const published = mockHCS.getPublished();
+  const verdicts = published.filter((m) => m.message.type === "verdict" && m.message.taskId === "price-mode-001");
+  assert(verdicts.length === 1, "Published exactly 1 verdict for price-mode task");
+
+  const verdict = verdicts[0].message;
+  assert(
+    verdict.type === "verdict" && verdict.winnerId === "0.0.MOCK_WORKER_2",
+    `In price mode, cheaper bidder (Worker 2) wins — got: ${verdict.type === "verdict" ? verdict.winnerId : "?"}`,
+  );
+
+  judge.stop();
+
+  console.log("\n═══════════════════════════════════════════");
+  console.log("  ✓ Price-mode test passed!");
+  console.log("═══════════════════════════════════════════\n");
+}
+
 // ── Run ──
 
-runMockTest().catch((err) => {
-  console.error("\n✗ Judge mock test failed:", err);
-  process.exit(1);
-});
+runMockTest()
+  .then(() => runPriceModeTest())
+  .catch((err) => {
+    console.error("\n✗ Judge mock test failed:", err);
+    process.exit(1);
+  });

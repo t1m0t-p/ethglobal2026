@@ -199,6 +199,17 @@ export class RequesterAgent {
     this.transition(RequesterState.COMPLETED);
   }
 
+  // ── Convenience: submit a new bounty (resets state if needed) ──
+
+  async submitBounty(
+    bountyParams: Omit<BountyMessage, "type" | "requesterAddress">,
+  ): Promise<void> {
+    if (this.state !== RequesterState.IDLE) {
+      this.reset();
+    }
+    await this.start(bountyParams);
+  }
+
   // ── Shutdown ──
 
   stop(): void {

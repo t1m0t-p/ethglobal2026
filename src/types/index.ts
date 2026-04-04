@@ -1,4 +1,17 @@
 // ──────────────────────────────────────────────
+// Bounty Strategy & Category
+// ──────────────────────────────────────────────
+
+export type BountyStrategy = "price" | "quality";
+
+export type BountyCategory =
+  | "crypto-price"
+  | "travel"
+  | "delivery"
+  | "general"
+  | string;
+
+// ──────────────────────────────────────────────
 // HCS Message Types (interface contract with Dev B)
 // ──────────────────────────────────────────────
 
@@ -9,6 +22,8 @@ export interface BountyMessage {
   reward: number;
   deadline: string; // ISO 8601
   requesterAddress: string;
+  strategy?: BountyStrategy;  // "price" = cheapest bid wins, "quality" = best result wins (default)
+  category?: BountyCategory;  // optional label for display/filtering
 }
 
 export interface BidMessage {
