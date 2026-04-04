@@ -29,9 +29,11 @@ npm run worker:mock     # Worker E2E test — no Hedera, no external deps
 npm run worker          # Worker against real Hedera testnet (x402 payment flow)
 npm run judge:mock      # Judge E2E test — no Hedera, no LLM API key required
 npm run judge           # Judge against real Hedera testnet
+
+npm run requester:interactive  # Interactive Requester with CLI prompts + HTTP API on port 3000
 ```
 
-> No test runner is configured. `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E test with assertions that exits 0 on success. The `demo` script orchestrates all agents and services in one process.
+> `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E integration test with inline assertions that exits 0 on success. The `demo` script orchestrates all agents and services in one process.
 
 ## Architecture
 
@@ -79,7 +81,7 @@ The Judge receives escrow info from the Requester via `judge.setEscrowInfo(taskI
 
 ### Types (`src/types/index.ts`)
 
-HCS message contracts: `BountyMessage`, `BidMessage`, `ResultMessage`, `VerdictMessage`. State machine enums: `WorkerState`, `RequesterState`, `JudgeState`. `IHCSService` is the interface both real and mock services implement.
+HCS message contracts: `BountyMessage`, `BidMessage`, `ResultMessage`, `VerdictMessage`. State machine enums: `WorkerState`, `RequesterState`, `JudgeState`. `IHCSService` is the interface both real and mock services implement. `BountyStrategy` (`"price"` | `"quality"`) controls Judge evaluation mode; `BountyCategory` is a string label for display/filtering.
 
 ### Config (`src/config/hedera.ts`)
 
@@ -120,15 +122,22 @@ RESULTS_WAIT_MS=30000                    # Judge debounce window, defaults to 30
 
 ## Testing
 
-Agents are fully testable via dependency injection — all use mocks for services. Each `*:mock.ts` runs self-contained E2E assertions:
+Two test layers:
 
+**Unit tests** — Jest (`jest.config.js`, `ts-jest` with ESM) targeting `src/__tests__/*.test.ts`:
 ```bash
-npm run worker:mock     # Tests Worker E2E flow (discovery → bid → fetch price → result)
-npm run requester:mock  # Tests Requester E2E flow (post bounty → collect bids → escrow)
-npm run judge:mock      # Tests Judge E2E flow (collect results → evaluate → verdict)
+npx jest                                     # Run all unit tests
+npx jest --testPathPattern=strategy          # Run a specific test file
 ```
+Tests cover evaluation strategy logic, ranking, HCS message contracts, and bounty data validation. The `__tests__` directory is excluded from `tsc` compilation.
 
-No test runner configured; assertions are inline assertions in `*:mock.ts` files. Exit code 0 = success, non-zero = failure.
+**Integration E2E tests** — inline assertions in `*-mock.ts` files, no Hedera or external deps:
+```bash
+npm run worker:mock     # Worker E2E flow (discovery → bid → fetch price → result)
+npm run requester:mock  # Requester E2E flow (post bounty → collect bids → escrow)
+npm run judge:mock      # Judge E2E flow (collect results → evaluate → verdict)
+```
+Exit code 0 = success. Uses `MockHCSService.simulateMessage()` to inject messages and `getPublished()` for assertions.
 
 ## Key Design Decisions
 
