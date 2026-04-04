@@ -12,6 +12,11 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** Falls back to HEDERA_ACCOUNT_ID / HEDERA_PRIVATE_KEY if role-specific vars are absent. */
+function envWithFallback(specific: string, fallback: string): string {
+  return process.env[specific] || requireEnv(fallback);
+}
+
 export function createHederaClient(): Client {
   const accountId = requireEnv("HEDERA_ACCOUNT_ID");
   const privateKey = requireEnv("HEDERA_PRIVATE_KEY");
@@ -40,26 +45,26 @@ export function loadTopicIds(): TopicIds {
 
 export function loadWorkerConfig(): { accountId: string; privateKey: string } {
   return {
-    accountId: requireEnv("WORKER_ACCOUNT_ID"),
-    privateKey: requireEnv("WORKER_PRIVATE_KEY"),
+    accountId: envWithFallback("WORKER_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
+    privateKey: envWithFallback("WORKER_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
   };
 }
 
 export function loadRequesterConfig(): { accountId: string; privateKey: string } {
   return {
-    accountId: requireEnv("REQUESTER_ACCOUNT_ID"),
-    privateKey: requireEnv("REQUESTER_PRIVATE_KEY"),
+    accountId: envWithFallback("REQUESTER_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
+    privateKey: envWithFallback("REQUESTER_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
   };
 }
 
 export function loadJudgeConfig(): {
-  accountId: string;
-  privateKey: string;
-  anthropicApiKey: string;
+  tokenId: string;
+  payerAccountId: string;
+  payerPrivateKey: string;
 } {
   return {
-    accountId: requireEnv("JUDGE_ACCOUNT_ID"),
-    privateKey: requireEnv("JUDGE_PRIVATE_KEY"),
-    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
+    tokenId: requireEnv("HTS_TOKEN_ID"),
+    payerAccountId: envWithFallback("JUDGE_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
+    payerPrivateKey: envWithFallback("JUDGE_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
   };
 }

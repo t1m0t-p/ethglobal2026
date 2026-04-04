@@ -12,13 +12,16 @@
     "requester": "tsx src/agents/requester.ts",
     "judge:mock": "tsx src/agents/judge-mock.ts",
     "judge": "tsx src/agents/judge.ts",
-    "topics:create": "tsx src/scripts/create-topics.ts"
+    "topics:create": "tsx src/scripts/create-topics.ts",
+    "setup": "tsx src/scripts/setup.ts",
+    "demo": "tsx src/demo.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.82.0",
     "@hiero-ledger/sdk": "^2.82.0",
     "dotenv": "^17.4.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
