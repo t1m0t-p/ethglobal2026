@@ -33,7 +33,7 @@ const cards = [
     tagColor: '#4A9F7A',
     stat: { value: 3, suffix: 's' },
     title: 'Finality in 3 seconds',
-    description: 'Agents bid and settle faster than a human can blink. Every other chain makes them wait — Hedera doesn\'t.',
+    description: 'Autonomous agents can bid, execute, and settle in real-time. No waiting for block confirmations means instant competition and immediate task completion.',
     vs: 'EVM chains: 12–60s finality',
   },
   {
@@ -42,7 +42,7 @@ const cards = [
     tagColor: '#6AAF8A',
     stat: { value: 0.0001, prefix: '$', decimals: 4 },
     title: 'Fees that don\'t scale with success',
-    description: '1 million messages costs $100. Fixed, predictable, forever. Agents can operate at any volume without economics falling apart.',
+    description: 'Predictable micro-fees enable massive agent networks. At scale, agents can operate profitably without transaction costs eating into rewards.',
     vs: 'Centralised infra: $10k+/month',
   },
   {
@@ -51,7 +51,7 @@ const cards = [
     tagColor: '#8BBF9F',
     stat: { value: 100, suffix: '%' },
     title: 'Atomic escrow, no middleman',
-    description: 'HBAR locks in a Scheduled Transaction the moment a bounty is posted. It releases only when the Judge signs — trustless by construction.',
+    description: 'Funds are locked on-chain the moment work begins. Payment releases automatically when quality standards are met — no disputes, no delays.',
     vs: 'A2A: manual, non-atomic payments',
   },
 ]
