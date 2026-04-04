@@ -1,17 +1,24 @@
 /**
- * demo.ts — Hivera Full Demo Orchestrator
+ * demo-real.ts — Hivera Full Demo Without Mocks
  *
- * Runs the complete multi-agent flow against real Hedera testnet:
+ * Runs the complete multi-agent flow against real Hedera testnet with real payment signing:
  *   Requester → posts bounty (HCS)
- *   Worker    → discovers, bids, fetches BTC price via x402, posts result (HCS)
- *   Judge     → evaluates submissions, posts verdict (HCS), releases payment
+ *   Worker    → discovers, bids, signs real HBAR transfers for x402 payments, posts result (HCS)
+ *   Judge     → evaluates submissions with real Gemini API, posts verdict (HCS), releases payment
  *
  * Prerequisites:
- *   1. .env configured with HEDERA_ACCOUNT_ID, HEDERA_PRIVATE_KEY, all topic IDs, ANTHROPIC_API_KEY
- *   2. Run `npm run setup` first if topic IDs are not yet in .env
+ *   1. .env configured with HEDERA_ACCOUNT_ID, HEDERA_PRIVATE_KEY, all topic IDs
+ *   2. ANTHROPIC_API_KEY for Judge's decision-making
+ *   3. GEMINI_API_KEY or WORKER2_GEMINI_API_KEY in .env for real Worker 2
+ *   4. Run `npm run setup` first if topic IDs are not yet in .env
+ *
+ * Key differences from npm run demo:
+ *   - Uses createRealPaymentSigner (actual Hedera transfers, not mock signatures)
+ *   - Uses real Gemini API if available in .env (no mock fallback)
+ *   - x402 mock server still used (simulates the server endpoint; payment signing is what's real)
  *
  * Usage:
- *   npm run demo
+ *   npm run demo:real
  */
 
 import { startServer } from "./x402-mock-server/server.js";
@@ -21,7 +28,7 @@ import { JudgeAgent } from "./agents/judge.js";
 import { HCSService } from "./services/hcs.js";
 import { EscrowService } from "./services/escrow.js";
 import { LLMService } from "./services/llm.js";
-import { createMockPaymentSigner } from "./services/x402-client.js";
+import { createRealPaymentSigner } from "./services/x402-client.js";
 import { createHederaClient, loadTopicIds, loadJudgeConfig, loadEscrowConfig, loadWorker2Config } from "./config/hedera.js";
 import { createGeminiWorkerService } from "./services/gemini-worker.js";
 import { PrivateKey } from "@hiero-ledger/sdk";
@@ -30,19 +37,19 @@ const X402_PORT = parseInt(process.env.X402_SERVER_PORT || "4020", 10);
 const X402_URL = `http://localhost:${X402_PORT}/api/v1/btc-price`;
 
 // ──────────────────────────────────────────────
-// Demo entrypoint
+// Demo entrypoint (real, no mocks)
 // ──────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  console.log("╔══════════════════════════════════════════════╗");
-  console.log("║   Hivera — Multi-Agent Demo on Hedera Testnet  ║");
-  console.log("╚══════════════════════════════════════════════╝\n");
+  console.log("╔════════════════════════════════════════════════════════════╗");
+  console.log("║   Hivera — Multi-Agent Demo on Hedera Testnet (REAL, NO MOCKS) ║");
+  console.log("╚════════════════════════════════════════════════════════════╝\n");
 
   // ── Setup ──────────────────────────────────────────────────────────────────
 
   console.log("▶ Starting x402 mock server...");
   const x402Server = await startServer(X402_PORT);
-  console.log(`  x402 server running on port ${X402_PORT}\n`);
+  console.log(`  x402 mock server running on port ${X402_PORT}\n`);
 
   const client = createHederaClient();
   const topicIds = loadTopicIds();
@@ -52,11 +59,9 @@ async function main(): Promise<void> {
   const accountId = process.env.HEDERA_ACCOUNT_ID!;
 
   // All agents share one HCSService backed by the same Hedera client.
-  // In a real multi-machine deployment each agent would have its own client.
   const hcsService = new HCSService(client);
 
   // Initialize escrow account (holds HBAR during task execution)
-  // Judge controls the escrow account and releases payment to the winner
   const requesterEscrow = new EscrowService(
     client,
     escrowConfig.escrowAccountId,
@@ -96,19 +101,24 @@ async function main(): Promise<void> {
     },
   });
 
+  // Worker 1: Real payment signer (actual HBAR transfers)
+  const workerPrivateKey = PrivateKey.fromStringDer(process.env.HEDERA_PRIVATE_KEY!);
+  const realPaymentSigner = createRealPaymentSigner(client, accountId, workerPrivateKey);
   const worker = new WorkerAgent({
     workerId: accountId,
     hcsService,
-    paymentSigner: createMockPaymentSigner(accountId),
+    paymentSigner: realPaymentSigner,
     x402Url: X402_URL,
     topicIds,
     bidAmount: 50,
   });
 
+  // Worker 2: Real Gemini service + real payment signing
   const worker2Config = loadWorker2Config();
-  const worker2PaymentSigner = createMockPaymentSigner(worker2Config.accountId);
+  const worker2PrivateKey = PrivateKey.fromStringDer(worker2Config.privateKey);
+  const worker2PaymentSigner = createRealPaymentSigner(client, worker2Config.accountId, worker2PrivateKey);
   const worker2GeminiService = createGeminiWorkerService(X402_URL, worker2PaymentSigner, {
-    geminiApiKey: worker2Config.geminiApiKey,
+    geminiApiKey: worker2Config.geminiApiKey, // Required, no fallback to mock
     hederaAccountId: worker2Config.accountId,
     hederaPrivateKey: worker2Config.privateKey,
   });
@@ -173,11 +183,11 @@ async function main(): Promise<void> {
 
   // ── Finish ─────────────────────────────────────────────────────────────────
 
-  console.log("\n╔══════════════════════════════════════════════╗");
-  console.log("║   Demo complete                               ║");
-  console.log("║   Verify all transactions on Hashscan:        ║");
+  console.log("\n╔════════════════════════════════════════════════════════════╗");
+  console.log("║   Demo complete (REAL, NO MOCKS)                            ║");
+  console.log("║   Verify all transactions on Hashscan:                      ║");
   console.log(`║   https://hashscan.io/testnet/account/${accountId.padEnd(10)} ║`);
-  console.log("╚══════════════════════════════════════════════╝\n");
+  console.log("╚════════════════════════════════════════════════════════════╝\n");
 
   worker.stop();
   worker2.stop();

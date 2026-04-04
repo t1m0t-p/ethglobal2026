@@ -8,6 +8,7 @@ import type {
 } from "../types/index.js";
 import { RequesterState } from "../types/index.js";
 import { EscrowService, MockEscrowService, type EscrowInfo } from "../services/escrow.js";
+import { PrivateKey } from "@hiero-ledger/sdk";
 
 // ──────────────────────────────────────────────
 // Requester Agent — State Machine
@@ -15,6 +16,7 @@ import { EscrowService, MockEscrowService, type EscrowInfo } from "../services/e
 
 export interface RequesterConfig {
   accountId: string;
+  privateKey: PrivateKey;
   hcsService: IHCSService;
   topicIds: TopicIds;
   escrowService: EscrowService | MockEscrowService;
@@ -25,10 +27,12 @@ export interface RequesterConfig {
 export class RequesterAgent {
   private state: RequesterState = RequesterState.IDLE;
   private readonly accountId: string;
+  private readonly privateKey: PrivateKey;
   private readonly hcs: IHCSService;
   private readonly topicIds: TopicIds;
   private readonly escrowService: EscrowService | MockEscrowService;
   private readonly maxBidsToAccept: number;
+  private readonly onEscrowCreated?: (info: EscrowInfo) => void;
 
   private currentBounty: BountyMessage | null = null;
   private acceptedBids: BidMessage[] = [];
@@ -38,10 +42,12 @@ export class RequesterAgent {
 
   constructor(config: RequesterConfig) {
     this.accountId = config.accountId;
+    this.privateKey = config.privateKey;
     this.hcs = config.hcsService;
     this.topicIds = config.topicIds;
     this.escrowService = config.escrowService;
     this.maxBidsToAccept = config.maxBidsToAccept ?? 2;
+    this.onEscrowCreated = config.onEscrowCreated;
   }
 
   getState(): RequesterState {
@@ -171,19 +177,23 @@ export class RequesterAgent {
       `[requester:${this.accountId}] Creating escrow for ${this.currentBounty.reward} HBAR — task ${this.currentBounty.taskId}`,
     );
 
-    // Use first accepted bidder as placeholder recipient.
-    // The actual winner is determined by the Judge, which releases the escrow
-    // to the correct account by signing the Scheduled Transaction.
+    // Deposit HBAR to the escrow account. The Judge will later release
+    // from the escrow account to the actual winner (determined at verdict time).
     this.escrowInfo = await this.escrowService.createEscrow(
       this.currentBounty.taskId,
       this.accountId,
-      this.acceptedBids[0].workerId,
       this.currentBounty.reward,
+      this.privateKey,
     );
+
+    // Notify Judge (or external handler) that escrow is ready
+    if (this.onEscrowCreated) {
+      this.onEscrowCreated(this.escrowInfo);
+    }
 
     this.transition(RequesterState.AWAITING_RESULTS);
     console.log(
-      `[requester:${this.accountId}] Escrow locked — schedule: ${this.escrowInfo.scheduleId}`,
+      `[requester:${this.accountId}] Escrow locked — account: ${this.escrowInfo.escrowAccountId}, amount: ${this.escrowInfo.amount} HBAR`,
     );
   }
 
@@ -224,7 +234,7 @@ export class RequesterAgent {
 // ──────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { createHederaClient, loadTopicIds, loadRequesterConfig } = await import(
+  const { createHederaClient, loadTopicIds, loadRequesterConfig, loadEscrowConfig } = await import(
     "../config/hedera.js"
   );
   const { HCSService } = await import("../services/hcs.js");
@@ -234,15 +244,18 @@ async function main(): Promise<void> {
   const client = createHederaClient();
   const topicIds = loadTopicIds();
   const requesterConfig = loadRequesterConfig();
+  const escrowConfig = loadEscrowConfig();
 
   const hcsService = new HCSService(client);
   const escrowService = new RealEscrowService(
     client,
-    PrivateKey.fromStringDer(requesterConfig.privateKey),
+    escrowConfig.escrowAccountId,
+    PrivateKey.fromStringDer(escrowConfig.escrowPrivateKey),
   );
 
   const requester = new RequesterAgent({
     accountId: requesterConfig.accountId,
+    privateKey: PrivateKey.fromStringDer(requesterConfig.privateKey),
     hcsService,
     topicIds,
     escrowService,

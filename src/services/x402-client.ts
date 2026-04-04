@@ -5,6 +5,7 @@ import type {
   X402PaymentResponse,
   PaymentSigner,
 } from "../types/index.js";
+import { Client, TransferTransaction, PrivateKey } from "@hiero-ledger/sdk";
 
 const TOTAL_TIMEOUT_MS = 30_000;
 
@@ -107,6 +108,59 @@ export function createMockPaymentSigner(workerId: string): PaymentSigner {
       payload: {
         signature: `mock-payment-${workerId}-${Date.now()}`,
         transactionId: `mock-txn-${workerId}-${Date.now()}`,
+      },
+    };
+  };
+}
+
+/** Real payment signer — creates and signs actual Hedera transfer transactions */
+export function createRealPaymentSigner(
+  client: Client,
+  workerId: string,
+  workerPrivateKey: PrivateKey,
+): PaymentSigner {
+  return async (requirements: X402PaymentRequirements): Promise<X402PaymentPayload> => {
+    const accepted = requirements.accepts[0];
+
+    // Check if payee is a mock account — if so, fall back to mock signing
+    if (accepted.payTo.includes("MOCK")) {
+      console.log(
+        `[x402-client] Mock payee detected — falling back to mock signing`,
+      );
+      return {
+        x402Version: requirements.x402Version,
+        scheme: accepted.scheme,
+        payload: {
+          signature: `mock-payment-${workerId}-${Date.now()}`,
+          transactionId: `mock-txn-${workerId}-${Date.now()}`,
+        },
+      };
+    }
+
+    console.log(
+      `[x402-client] Signing real payment: ${accepted.amount} ${accepted.asset} → ${accepted.payTo}`,
+    );
+
+    // Create transfer transaction
+    const tx = new TransferTransaction()
+      .addHbarTransfer(workerId, -parseInt(accepted.amount))
+      .addHbarTransfer(accepted.payTo, parseInt(accepted.amount))
+      .freezeWith(client);
+
+    // Sign and submit
+    const signed = await tx.sign(workerPrivateKey);
+    const response = await signed.execute(client);
+    const receipt = await response.getReceipt(client);
+
+    const transactionId = response.transactionId.toString();
+    console.log(`[x402-client] Real payment transaction submitted: ${transactionId}`);
+
+    return {
+      x402Version: requirements.x402Version,
+      scheme: accepted.scheme,
+      payload: {
+        signature: transactionId,
+        transactionId,
       },
     };
   };

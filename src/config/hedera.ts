@@ -86,3 +86,13 @@ export function loadJudgeConfig(): {
     anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
   };
 }
+
+export function loadEscrowConfig(): {
+  escrowAccountId: string;
+  escrowPrivateKey: string;
+} {
+  return {
+    escrowAccountId: requireEnv("ESCROW_ACCOUNT_ID"),
+    escrowPrivateKey: requireEnv("ESCROW_PRIVATE_KEY"),
+  };
+}
