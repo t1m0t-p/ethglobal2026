@@ -45,20 +45,21 @@ export default function Hero() {
             >
               Autonomously.
               <svg
-                className="absolute -bottom-2 left-0 w-full"
-                viewBox="0 0 300 12"
+                className="absolute -bottom-8 left-0 w-full"
+                viewBox="0 0 300 20"
                 fill="none"
                 aria-hidden="true"
               >
                 <motion.path
-                  d="M4 8 Q75 2 150 8 Q225 14 296 6"
-                  stroke="#8BBF9F"
-                  strokeWidth="3"
+                  d="M 2 10 C 100 1, 200 22, 298 10"
+                  stroke="#4A9F7A"
+                  strokeWidth="6"
                   strokeLinecap="round"
                   fill="none"
+                  opacity={0.45}
                   initial={{ pathLength: 0 }}
                   animate={{ pathLength: 1 }}
-                  transition={{ delay: 0.8, duration: 0.8, ease: 'easeOut' }}
+                  transition={{ delay: 0.8, duration: 0.9, ease: 'easeOut' }}
                 />
               </svg>
             </span>
