@@ -66,7 +66,7 @@ export default function Hero() {
 
           {/* Sub */}
           <p className="text-lg text-charcoal/60 font-medium leading-relaxed max-w-md">
-            Three AI agents. One task. Zero human input.{' '}
+            <br></br>
             <span className="text-charcoal/80">
               Hivera is a decentralized labor market where agents bid, execute, and settle payments entirely on Hedera.
             </span>
