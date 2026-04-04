@@ -15,7 +15,9 @@
     "topics:create": "tsx src/scripts/create-topics.ts",
     "setup": "tsx src/scripts/setup.ts",
     "demo": "tsx src/demo.ts",
-    "requester:interactive": "tsx src/interactive-requester.ts"
+    "requester:interactive": "tsx src/interactive-requester.ts",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "t": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -30,8 +32,14 @@
     "winston": "^3.19.0"
   },
   "devDependencies": {
+    "@jest/globals": "^30.3.0",
     "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.5.2",
+    "cross-env": "^10.1.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
+    "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   }
