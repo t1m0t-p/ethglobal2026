@@ -145,7 +145,7 @@ export default function HowItWorks() {
             How the hive works
           </h2>
           <p className="mt-4 text-charcoal/50 font-medium max-w-lg mx-auto">
-            Three autonomous agents. No coordinator. No middleman. Just on-chain logic.
+            Three AI agents. One task. Zero human input.
           </p>
         </motion.div>
 
