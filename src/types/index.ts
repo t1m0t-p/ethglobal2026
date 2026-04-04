@@ -1,0 +1,84 @@
+// ──────────────────────────────────────────────
+// HCS Message Types (interface contract with Dev B)
+// ──────────────────────────────────────────────
+
+export interface BountyMessage {
+  type: "bounty";
+  taskId: string;
+  description: string;
+  reward: number;
+  deadline: string; // ISO 8601
+  requesterAddress: string;
+}
+
+export interface BidMessage {
+  type: "bid";
+  taskId: string;
+  workerId: string;
+  bidAmount: number;
+  estimatedTime: string;
+}
+
+export interface ResultMessage {
+  type: "result";
+  taskId: string;
+  workerId: string;
+  data: PriceData;
+}
+
+export interface VerdictMessage {
+  type: "verdict";
+  taskId: string;
+  winnerId: string;
+  reason: string;
+  paymentAmount: number;
+}
+
+export type HCSMessage = BountyMessage | BidMessage | ResultMessage | VerdictMessage;
+
+// ──────────────────────────────────────────────
+// Price Data
+// ──────────────────────────────────────────────
+
+export interface PriceData {
+  sources: string[];
+  prices: number[];
+  average: number;
+}
+
+// ──────────────────────────────────────────────
+// Worker State Machine
+// ──────────────────────────────────────────────
+
+export enum WorkerState {
+  IDLE = "IDLE",
+  DISCOVERING = "DISCOVERING",
+  BIDDING = "BIDDING",
+  EXECUTING = "EXECUTING",
+  SUBMITTING = "SUBMITTING",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
+
+// ──────────────────────────────────────────────
+// HCS Service Interface
+// ──────────────────────────────────────────────
+
+export type HCSMessageHandler = (message: HCSMessage, timestamp: string) => void;
+
+export interface IHCSService {
+  subscribe(topicId: string, onMessage: HCSMessageHandler): Promise<void>;
+  publish(topicId: string, message: HCSMessage): Promise<void>;
+  disconnect(): void;
+}
+
+// ──────────────────────────────────────────────
+// Topic IDs Config
+// ──────────────────────────────────────────────
+
+export interface TopicIds {
+  bounties: string;
+  bids: string;
+  results: string;
+  verdicts: string;
+}
