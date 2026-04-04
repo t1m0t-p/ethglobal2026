@@ -109,10 +109,9 @@ export class GeminiWorkerService implements IGeminiWorkerService {
       },
     });
 
-    // L'API interne du kit expose submitTopicMessage, getTopicMessages, etc.
+    // L'API interne du kit expose run(method, arg) pour tous les tools
     const kitApi = toolkit.getHederaAgentKitAPI() as {
-      submitTopicMessage(params: { topicId: string; message: string }): Promise<unknown>;
-      getTopicMessages(params: { topicId: string }): Promise<unknown>;
+      run(method: string, arg: unknown): Promise<string>;
     };
 
     // ── Wrapper tools avec schemas Gemini-compatibles (pas de type[] ni anyOf) ──
@@ -122,11 +121,11 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     const hcsPublishTool = tool(
       async (input: { topicId: string; message: string }): Promise<string> => {
         console.log(`[gemini-worker] hcs_publish_message → topic ${input.topicId}`);
-        const result = await kitApi.submitTopicMessage({
+        const result = await kitApi.run("submit_topic_message_tool", {
           topicId: input.topicId,
           message: input.message,
         });
-        return JSON.stringify(result ?? { success: true });
+        return result;
       },
       {
         name: "hcs_publish_message",
@@ -143,8 +142,8 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     const hcsQueryTool = tool(
       async (input: { topicId: string }): Promise<string> => {
         console.log(`[gemini-worker] hcs_query_messages → topic ${input.topicId}`);
-        const result = await kitApi.getTopicMessages({ topicId: input.topicId });
-        return JSON.stringify(result ?? []);
+        const result = await kitApi.run("get_topic_messages_query_tool", { topicId: input.topicId });
+        return result;
       },
       {
         name: "hcs_query_messages",
