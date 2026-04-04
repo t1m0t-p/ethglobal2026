@@ -73,8 +73,8 @@ export class EscrowService {
       .sign(this.operatorKey)
       .then((tx) => tx.execute(this.client));
 
-    const receipt = await response.getReceipt(this.client);
-    const txnId = receipt.transactionId?.toString() ?? response.transactionId.toString();
+    await response.getReceipt(this.client);
+    const txnId = response.transactionId.toString();
 
     console.log(
       `[escrow] Released schedule ${info.scheduleId} — ${info.amount} HBAR sent to ${info.recipientAddress}`,
