@@ -193,7 +193,7 @@ export class GeminiWorkerService implements IGeminiWorkerService {
           const genAI = new GoogleGenerativeAI(geminiApiKeyForSearch);
           const searchModel = genAI.getGenerativeModel({
             model: "gemini-2.5-flash",
-            tools: [{ googleSearchRetrieval: {} }],
+            tools: [{ google_search: {} } as any],
           });
           const result = await searchModel.generateContent({
             contents: [{ role: "user", parts: [{ text: input.query }] }],
