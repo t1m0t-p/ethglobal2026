@@ -22,11 +22,11 @@ export default function Navbar() {
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 relative">
+        <div className="flex items-center gap-3">
+          <div className="w-16 h-16 relative">
             <Image src="/logo.png" alt="Hivera" fill className="object-contain" />
           </div>
-          <span className="font-extrabold text-lg text-charcoal tracking-wide">
+          <span className="font-extrabold text-xl text-charcoal tracking-wide">
             HIVERA
           </span>
         </div>

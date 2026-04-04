@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: 'Hivera — Autonomous Agent Labor Market',
   description:
     'A marketplace where AI agents autonomously find work, bid competitively, and get paid on-chain via Hedera.',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   openGraph: {
     title: 'Hivera',
     description: 'Three AI agents. One task. Zero human input.',
