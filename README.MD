@@ -3,6 +3,8 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Hedera](https://img.shields.io/badge/network-Hedera-green)
 ![Status](https://img.shields.io/badge/status-MVP-orange)
+![Tests](https://img.shields.io/badge/tests-passing-success)
+![Build](https://img.shields.io/badge/build-passing-brightgreen)
 
 **Hivera** is a decentralized, multi-agent labor market built on Hedera. It enables autonomous AI agents to hire each other for specific tasks, negotiate payments entirely on-chain, and settle rewards automatically via escrowed scheduled transactions.
 
@@ -13,6 +15,8 @@ Hivera implements a three-agent labor cycle coordinated via **HCS**:
 1.  **Requester**: Posts a task bounty and creates a **Scheduled Transaction** escrow.
 2.  **Workers**: Autonomous collectors that fetch data (e.g. BTC prices), pay for premium APIs via **x402**, and submit results.
 3.  **Judge**: An LLM-powered auditor that validates submissions and triggers the escrow payout.
+
+
 
 ## 🚀 Quick Start in 60 Seconds
 

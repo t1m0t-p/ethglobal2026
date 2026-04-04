@@ -1,22 +1,40 @@
-import { JudgeMock } from '../agents/judge-mock.js';
+import { JudgeAgent } from '../agents/judge.js';
+import { MockHCSService } from '../services/hcs.js';
+import { MockLLMService } from '../services/llm.js';
+import { MockEscrowService } from '../services/escrow.js';
+import { JudgeState, type ResultMessage } from '../types/index.js';
 
-describe('Judging Logic Mock', () => {
-  const judge = new JudgeMock();
+describe('Judging Logic', () => {
+  const hcs = new MockHCSService();
+  const llm = new MockLLMService();
+  const escrow = new MockEscrowService();
+
+  const judge = new JudgeAgent({
+    accountId: '0.0.JUDGE',
+    hcsService: hcs,
+    topicIds: { bounties: 'b', bids: 'bi', results: 'r', verdicts: 'v' },
+    llmService: llm,
+    escrowService: escrow,
+    resultsWaitMs: 0
+  });
   
-  const mockResults = [
-    { workerId: '0.0.1', taskId: 'test-1', data: { average: 45000 } },
-    { workerId: '0.0.2', taskId: 'test-1', data: { average: 45010 } }
+  const mockResults: ResultMessage[] = [
+    { 
+      type: 'result', 
+      workerId: 'w1', 
+      taskId: 'test-1', 
+      data: { sources: ['s1'], prices: [10], average: 10 } 
+    }
   ];
 
-  it('should pick the first worker if results are provided', async () => {
-    const verdict = await judge.evaluate(mockResults);
-    expect(verdict.winnerId).toBe('0.0.1');
-    expect(verdict.taskId).toBe('test-1');
-  });
-
-  it('should return a default winner if no results are provided', async () => {
-    const verdict = await judge.evaluate([]);
-    expect(verdict.winnerId).toBe('0.0.99999');
-    expect(verdict.taskId).toBe('unknown');
+  it('should correctly transition to COMPLETED even without escrow registered', async () => {
+    // This is more of an integration unit test for the state machine
+    await judge.start();
+    // Simulate result arriving
+    hcs.simulateMessage('r', mockResults[0]);
+    
+    // In our simplified test, we just wait for the timer
+    await new Promise(r => setTimeout(r, 100));
+    expect(judge.getState()).toBe(JudgeState.COMPLETED);
   });
 });
