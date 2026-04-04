@@ -131,6 +131,12 @@ export class WorkerAgent {
     // Process bounty asynchronously
     this.processBounty(bounty).catch((err) => {
       this.transitionToError(err instanceof Error ? err.message : String(err));
+      // Recover and listen for next bounty
+      this.currentBounty = null;
+      this.lastResult = null;
+      this.errorReason = null;
+      this.transition(WorkerState.DISCOVERING);
+      console.log(`[worker:${this.workerId}] Recovered from error — listening for bounties...`);
     });
   }
 
@@ -223,7 +229,7 @@ export class WorkerAgent {
     );
   }
 
-  // ── Verdict handling (informational) ──
+  // ── Verdict handling ──
 
   private handleVerdict(verdict: VerdictMessage): void {
     if (!this.currentBounty || verdict.taskId !== this.currentBounty.taskId) {
@@ -239,6 +245,13 @@ export class WorkerAgent {
         `[worker:${this.workerId}] Lost bounty ${verdict.taskId} — winner: ${verdict.winnerId}`,
       );
     }
+
+    // Ready for next bounty
+    this.currentBounty = null;
+    this.lastResult = null;
+    this.errorReason = null;
+    this.transition(WorkerState.DISCOVERING);
+    console.log(`[worker:${this.workerId}] Listening for bounties...`);
   }
 
   // ── Shutdown ──
