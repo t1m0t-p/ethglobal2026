@@ -16,6 +16,38 @@ import {
 } from "@hiero-ledger/sdk";
 
 // ──────────────────────────────────────────────
+// IHTSService — injectable interface for the Judge
+// ──────────────────────────────────────────────
+
+export interface IHTSService {
+  transferToken(recipientId: string, amount: number): Promise<string>;
+}
+
+// ──────────────────────────────────────────────
+// HTSService — real Hedera token transfers
+// ──────────────────────────────────────────────
+
+export class HTSService implements IHTSService {
+  constructor(
+    private readonly client: Client,
+    private readonly tokenId: string,
+    private readonly senderAccountId: string,
+    private readonly senderPrivateKey: string,
+  ) {}
+
+  async transferToken(recipientId: string, amount: number): Promise<string> {
+    return transferToken(
+      this.client,
+      this.tokenId,
+      this.senderAccountId,
+      this.senderPrivateKey,
+      recipientId,
+      amount,
+    );
+  }
+}
+
+// ──────────────────────────────────────────────
 // Token Association
 // ──────────────────────────────────────────────
 
