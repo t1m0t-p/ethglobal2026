@@ -110,7 +110,8 @@ app.get("/api/v1/btc-price", async (req, res) => {
 });
 
 // Only start if run directly (not imported)
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"))) {
+import { fileURLToPath } from "url";
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   startServer();
 }
 
