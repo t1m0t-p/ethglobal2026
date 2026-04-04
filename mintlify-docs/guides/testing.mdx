@@ -1,0 +1,73 @@
+---
+title: "Testing"
+sidebarTitle: "Testing"
+description: "Jest test suite for validating data integrity and agent evaluation logic."
+icon: "flask-vial"
+---
+
+## Running Tests
+
+```bash
+npm test
+```
+
+Tests use Jest with ESM support via the `--experimental-vm-modules` flag.
+
+## Test Suite
+
+| Test File | What It Validates |
+|---|---|
+| `bounty.test.ts` | Bounty JSON data has all required fields |
+| `verdict.test.ts` | Verdict JSON data structure and reason validity |
+| `ranking.test.ts` | MockLLMService scoring logic (sources > variance) |
+
+### Bounty Validation
+
+```typescript
+describe('Bounty Data Validation', () => {
+  it('should have required bounty fields', () => {
+    bounties.forEach((bounty) => {
+      expect(bounty.type).toBe('bounty');
+      expect(bounty.taskId).toBeDefined();
+      expect(bounty.reward).toBeGreaterThan(0);
+    });
+  });
+});
+```
+
+### Ranking Logic
+
+```typescript
+describe('Judging Logic (MockLLMService)', () => {
+  it('should pick the worker with more sources', async () => {
+    const results = [
+      { workerId: 'A', data: { sources: ['a','b','c'], ... } },  // 3 sources
+      { workerId: 'B', data: { sources: ['a','b'], ... } },      // 2 sources
+    ];
+    const evaluation = await llm.evaluate('test', 'desc', results);
+    expect(evaluation.winnerId).toBe('A');
+  });
+
+  it('should pick lower variance if source count is equal', async () => {
+    const results = [
+      { workerId: 'LOW_VAR',  data: { sources: ['a','b'], prices: [45000, 45001], ... } },
+      { workerId: 'HIGH_VAR', data: { sources: ['a','b'], prices: [45000, 45100], ... } },
+    ];
+    const evaluation = await llm.evaluate('test', 'desc', results);
+    expect(evaluation.winnerId).toBe('LOW_VAR');
+  });
+});
+```
+
+## Adding New Tests
+
+Create test files in `src/__tests__/` following the naming convention `*.test.ts`.
+
+```typescript
+// src/__tests__/my-test.test.ts
+describe('My Feature', () => {
+  it('should work correctly', () => {
+    expect(true).toBe(true);
+  });
+});
+```

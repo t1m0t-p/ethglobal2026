@@ -1,0 +1,110 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Hivera Documentation",
+  "logo": {
+    "dark": "/logo.png",
+    "light": "/logo.png"
+  },
+  "favicon": "/logo.png",
+  "colors": {
+    "primary": "#F7931A",
+    "light": "#FFAA33",
+    "dark": "#D4750E",
+    "anchors": {
+      "from": "#F7931A",
+      "to": "#6C3AED"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/t1m0t-p/ethglobal2026"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Run Demo",
+    "url": "https://github.com/t1m0t-p/ethglobal2026#-quick-start-in-60-seconds"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    },
+    {
+      "name": "Technical Deep Dives",
+      "url": "deep-dives"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub Repository",
+      "icon": "github",
+      "url": "https://github.com/t1m0t-p/ethglobal2026"
+    },
+    {
+      "name": "Hedera Explorer",
+      "icon": "magnifying-glass",
+      "url": "https://hashscan.io/"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart",
+        "architecture"
+      ]
+    },
+    {
+      "group": "Agents",
+      "pages": [
+        "agents/overview",
+        "agents/requester",
+        "agents/worker",
+        "agents/judge"
+      ]
+    },
+    {
+      "group": "Services",
+      "pages": [
+        "services/hcs",
+        "services/escrow",
+        "services/x402",
+        "services/llm",
+        "services/price-fetcher"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/environment-setup",
+        "guides/running-the-demo",
+        "guides/testing",
+        "guides/troubleshooting"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/overview",
+        "api-reference/hcs-messages",
+        "api-reference/x402-protocol",
+        "api-reference/type-reference"
+      ]
+    },
+    {
+      "group": "Technical Deep Dives",
+      "pages": [
+        "deep-dives/payment-flow",
+        "deep-dives/state-machines",
+        "deep-dives/security-model",
+        "deep-dives/hedera-integration"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/t1m0t-p/ethglobal2026",
+    "linkedin": "https://www.linkedin.com/company/pocinnovation/mycompany/"
+  }
+}

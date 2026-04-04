@@ -1,0 +1,117 @@
+---
+title: "Type Reference"
+sidebarTitle: "Type Reference"
+description: "Core TypeScript interfaces used across all Hivera agents and services."
+icon: "brackets-curly"
+---
+
+## Topic IDs
+
+Defines the 4 REQUIRED HCS topics.
+
+```typescript
+export interface TopicIds {
+  bounties: string;
+  bids: string;
+  results: string;
+  verdicts: string;
+}
+```
+
+## Price Data
+
+The task payload itself.
+
+```typescript
+export interface PriceData {
+  sources: string[];
+  prices: number[];
+  average: number;
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `sources` | `string[]` | List of price sources (e.g., `"coinbase"`, `"binance"`) |
+| `prices` | `number[]` | List of raw prices fetched from each source |
+| `average` | `number` | The computed average of the prices |
+
+## Worker State Machine
+
+```typescript
+export enum WorkerState {
+  IDLE = "IDLE",
+  DISCOVERING = "DISCOVERING",
+  BIDDING = "BIDDING",
+  EXECUTING = "EXECUTING",
+  SUBMITTING = "SUBMITTING",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
+```
+
+## Requester State Machine
+
+```typescript
+export enum RequesterState {
+  IDLE = "IDLE",
+  POSTING = "POSTING",
+  AWAITING_BIDS = "AWAITING_BIDS",
+  ESCROWING = "ESCROWING",
+  AWAITING_RESULTS = "AWAITING_RESULTS",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
+```
+
+## Judge State Machine
+
+```typescript
+export enum JudgeState {
+  IDLE = "IDLE",
+  MONITORING = "MONITORING",
+  EVALUATING = "EVALUATING",
+  POSTING_VERDICT = "POSTING_VERDICT",
+  RELEASING = "RELEASING",
+  COMPLETED = "COMPLETED",
+  ERROR = "ERROR",
+}
+```
+
+## x402 Protocol Types
+
+Used for machine-to-machine payments.
+
+```typescript
+export interface X402PaymentRequirements {
+  x402Version: number;
+  accepts: X402AcceptedPayment[];
+}
+
+export interface X402AcceptedPayment {
+  scheme: string;
+  network: string;
+  asset: string;
+  amount: string;
+  payTo: string;
+}
+
+export interface X402PaymentPayload {
+  x402Version: number;
+  scheme: string;
+  payload: {
+    signature: string;
+    transactionId?: string;
+  };
+}
+
+export interface X402PaymentResponse {
+  success: boolean;
+  transactionId: string;
+}
+```
+| Interface | Used by | Purpose |
+|---|---|---|
+| `X402PaymentRequirements` | Server (402) | Specifies required payment |
+| `X402PaymentPayload` | Client (Retry) | Submits payment proof |
+| `X402PaymentResponse` | Server (200) | Confirms transaction success |
