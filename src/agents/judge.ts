@@ -10,6 +10,7 @@ import type {
 import { JudgeState } from "../types/index.js";
 import { EscrowService, MockEscrowService, type EscrowInfo } from "../services/escrow.js";
 import { LLMService, MockLLMService } from "../services/llm.js";
+import type { IHTSService } from "../services/hts.js";
 
 // ──────────────────────────────────────────────
 // Judge Agent — State Machine
@@ -21,6 +22,7 @@ export interface JudgeConfig {
   topicIds: TopicIds;
   llmService: LLMService | MockLLMService;
   escrowService: EscrowService | MockEscrowService;
+  htsService?: IHTSService; // optional — if provided, transfers HIVE tokens to winner on verdict
   resultsWaitMs?: number; // how long to collect results before evaluating (default 30_000)
 }
 
@@ -31,6 +33,7 @@ export class JudgeAgent {
   private readonly topicIds: TopicIds;
   private readonly llmService: LLMService | MockLLMService;
   private readonly escrowService: EscrowService | MockEscrowService;
+  private readonly htsService?: IHTSService;
   private readonly resultsWaitMs: number;
 
   // Per-task collections — Judge can handle multiple bounties sequentially
@@ -49,6 +52,7 @@ export class JudgeAgent {
     this.topicIds = config.topicIds;
     this.llmService = config.llmService;
     this.escrowService = config.escrowService;
+    this.htsService = config.htsService;
     this.resultsWaitMs = config.resultsWaitMs ?? 30_000;
   }
 
@@ -254,9 +258,18 @@ export class JudgeAgent {
       return;
     }
 
+    // 1. HTS token transfer → actual winner (HIVE reward)
+    if (this.htsService) {
+      const htsTxId = await this.htsService.transferToken(verdict.winnerId, verdict.paymentAmount);
+      console.log(
+        `[judge:${this.accountId}] HIVE token sent to winner ${verdict.winnerId} — txn: ${htsTxId}`,
+      );
+    }
+
+    // 2. Sign Hedera Scheduled TX → releases HBAR to escrow recipient (first bidder, fixed at creation)
     const txnId = await this.escrowService.releaseEscrow(escrowInfo);
     console.log(
-      `[judge:${this.accountId}] Payment released — ${verdict.paymentAmount} HBAR to ${verdict.winnerId} — txn: ${txnId}`,
+      `[judge:${this.accountId}] HBAR escrow released — ${escrowInfo.amount} HBAR → ${escrowInfo.recipientAddress} — txn: ${txnId}`,
     );
 
     this.transition(JudgeState.COMPLETED);
