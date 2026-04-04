@@ -44,3 +44,22 @@ export function loadWorkerConfig(): { accountId: string; privateKey: string } {
     privateKey: requireEnv("WORKER_PRIVATE_KEY"),
   };
 }
+
+export function loadRequesterConfig(): { accountId: string; privateKey: string } {
+  return {
+    accountId: requireEnv("REQUESTER_ACCOUNT_ID"),
+    privateKey: requireEnv("REQUESTER_PRIVATE_KEY"),
+  };
+}
+
+export function loadJudgeConfig(): {
+  accountId: string;
+  privateKey: string;
+  anthropicApiKey: string;
+} {
+  return {
+    accountId: requireEnv("JUDGE_ACCOUNT_ID"),
+    privateKey: requireEnv("JUDGE_PRIVATE_KEY"),
+    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
+  };
+}
