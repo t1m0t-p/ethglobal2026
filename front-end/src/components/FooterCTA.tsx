@@ -2,7 +2,6 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
-import Image from 'next/image'
 
 const teamMembers = [
   { name: 'Antoine', github: 'Antoine0703' },
@@ -55,14 +54,22 @@ export default function FooterCTA() {
         <HexBg />
 
         <div className="relative z-10 max-w-3xl mx-auto px-6 text-center flex flex-col items-center gap-8">
-          {/* Logo */}
+          {/* Bee animation */}
           <motion.div
             initial={{ opacity: 0, scale: 0.7 }}
             animate={inView ? { opacity: 1, scale: 1 } : {}}
             transition={{ duration: 0.6, type: 'spring', stiffness: 200 }}
-            className="w-20 h-20 relative float"
+            className="w-40 h-40 relative"
           >
-            <Image src="/logo.png" alt="Hivera" fill className="object-contain" />
+            <video
+              src="/bee-animation.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-full object-contain"
+              style={{ mixBlendMode: 'multiply' }}
+            />
           </motion.div>
 
           {/* Text */}
