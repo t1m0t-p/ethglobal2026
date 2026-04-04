@@ -19,6 +19,7 @@ export interface RequesterConfig {
   topicIds: TopicIds;
   escrowService: EscrowService | MockEscrowService;
   maxBidsToAccept?: number; // default 2
+  onEscrowCreated?: (info: EscrowInfo) => void; // called after escrow is locked — use to wire Judge
 }
 
 export class RequesterAgent {
