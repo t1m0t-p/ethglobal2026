@@ -58,13 +58,15 @@ export function loadRequesterConfig(): { accountId: string; privateKey: string }
 }
 
 export function loadJudgeConfig(): {
-  tokenId: string;
-  payerAccountId: string;
+  accountId: string;
   payerPrivateKey: string;
+  tokenId: string;
+  anthropicApiKey: string;
 } {
   return {
-    tokenId: requireEnv("HTS_TOKEN_ID"),
-    payerAccountId: envWithFallback("JUDGE_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
+    accountId: envWithFallback("JUDGE_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
     payerPrivateKey: envWithFallback("JUDGE_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
+    tokenId: requireEnv("HTS_TOKEN_ID"),
+    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
   };
 }

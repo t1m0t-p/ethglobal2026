@@ -273,7 +273,7 @@ async function main(): Promise<void> {
   const hcsService = new HCSService(client);
   const escrowService = new RealEscrowService(
     client,
-    PrivateKey.fromStringDer(judgeConfig.privateKey),
+    PrivateKey.fromStringDer(judgeConfig.payerPrivateKey),
   );
   const llmService = new RealLLMService(judgeConfig.anthropicApiKey);
 

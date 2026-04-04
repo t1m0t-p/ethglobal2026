@@ -4,11 +4,11 @@
  * Runs the complete multi-agent flow against real Hedera testnet:
  *   Requester → posts bounty (HCS)
  *   Worker    → discovers, bids, fetches BTC price via x402, posts result (HCS)
- *   Judge     → evaluates submissions, posts verdict (HCS), releases HIVE payment (HTS)
+ *   Judge     → evaluates submissions, posts verdict (HCS), releases payment
  *
  * Prerequisites:
- *   1. .env configured with HEDERA_ACCOUNT_ID, HEDERA_PRIVATE_KEY, all topic IDs, HTS_TOKEN_ID
- *   2. Run `npm run setup` first if topic IDs and token ID are not yet in .env
+ *   1. .env configured with HEDERA_ACCOUNT_ID, HEDERA_PRIVATE_KEY, all topic IDs, ANTHROPIC_API_KEY
+ *   2. Run `npm run setup` first if topic IDs are not yet in .env
  *
  * Usage:
  *   npm run demo
@@ -19,9 +19,11 @@ import { WorkerAgent } from "./agents/worker.js";
 import { RequesterAgent } from "./agents/requester.js";
 import { JudgeAgent } from "./agents/judge.js";
 import { HCSService } from "./services/hcs.js";
-import { createJudgeProvider } from "./services/llm-judge.js";
+import { EscrowService, MockEscrowService } from "./services/escrow.js";
+import { LLMService } from "./services/llm.js";
 import { createMockPaymentSigner } from "./services/x402-client.js";
 import { createHederaClient, loadTopicIds, loadJudgeConfig } from "./config/hedera.js";
+import { PrivateKey } from "@hiero-ledger/sdk";
 
 const X402_PORT = parseInt(process.env.X402_SERVER_PORT || "4020", 10);
 const X402_URL = `http://localhost:${X402_PORT}/api/v1/btc-price`;
@@ -51,15 +53,24 @@ async function main(): Promise<void> {
   // In a real multi-machine deployment each agent would have its own client.
   const hcsService = new HCSService(client);
 
-  const judgeProvider = createJudgeProvider();
+  // Initialize escrow services for Requester and Judge
+  const requesterEscrow = new MockEscrowService(); // Use mock for demo
+  const judgeEscrow = new EscrowService(
+    client,
+    PrivateKey.fromStringDer(judgeConfig.payerPrivateKey),
+  );
+
+  // Initialize LLM service for Judge
+  const llmService = new LLMService(judgeConfig.anthropicApiKey);
 
   // ── Instantiate agents ─────────────────────────────────────────────────────
 
   const requester = new RequesterAgent({
-    requesterId: accountId,
+    accountId,
     hcsService,
     topicIds,
-    maxAcceptedBids: 2,
+    escrowService: requesterEscrow,
+    maxBidsToAccept: 2,
   });
 
   const worker = new WorkerAgent({
@@ -72,16 +83,12 @@ async function main(): Promise<void> {
   });
 
   const judge = new JudgeAgent({
-    judgeId: accountId,
+    accountId: judgeConfig.accountId,
     hcsService,
     topicIds,
-    judgeProvider,
-    hederaClient: client,
-    tokenId: judgeConfig.tokenId,
-    payerAccountId: judgeConfig.payerAccountId,
-    payerPrivateKey: judgeConfig.payerPrivateKey,
-    resultWaitMs: 30_000,
-    minResultsToEvaluate: 1, // evaluate as soon as 1 result arrives (single worker demo)
+    llmService,
+    escrowService: judgeEscrow,
+    resultsWaitMs: 30_000,
   });
 
   // ── Graceful shutdown ──────────────────────────────────────────────────────
@@ -94,40 +101,32 @@ async function main(): Promise<void> {
     process.exit(0);
   });
 
-  // ── Start all agents ───────────────────────────────────────────────────────
+  // ── Start Judge and Worker agents first to ensure subscriptions ─────────────
 
-  console.log("▶ Starting agents...");
-  await requester.start();
-  await worker.start();
+  console.log("▶ Starting Judge and Worker agents...");
   await judge.start();
-  console.log("  All agents running\n");
+  await worker.start();
+  console.log("  Agents subscribed to HCS topics\n");
+
+  // Small delay to ensure all subscriptions are established
+  await sleep(2000);
 
   // ── Define the task ────────────────────────────────────────────────────────
 
   const taskId = `btc-price-${Date.now()}`;
   const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 min
 
-  const task = {
+  const bountyParams = {
     taskId,
     description: "Fetch BTC/USD price from 3 independent sources and return the average",
     reward: 100,
     deadline,
   };
 
-  // Tell the Judge which task to watch before the Requester posts it
-  judge.watchTask({
-    type: "bounty",
-    requesterAddress: accountId,
-    ...task,
-  });
-
-  // Small delay to ensure all subscriptions are established
-  await sleep(2000);
-
-  // ── Post bounty ────────────────────────────────────────────────────────────
+  // ── Requester posts bounty ────────────────────────────────────────────────────
 
   console.log("▶ Requester posting bounty...");
-  await requester.postBounty(task);
+  await requester.start(bountyParams);
 
   console.log("\n▶ Waiting for Worker to discover, execute, and submit result...");
   console.log(`  (Judge will evaluate after 30s or 1 result — whichever comes first)\n`);
