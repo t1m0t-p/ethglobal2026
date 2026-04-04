@@ -11,6 +11,7 @@ import type {
 } from "../types/index.js";
 import { WorkerState } from "../types/index.js";
 import { fetchWithPayment, createMockPaymentSigner } from "../services/x402-client.js";
+import type { IGeminiWorkerService } from "../services/gemini-worker.js";
 
 // ──────────────────────────────────────────────
 // Worker Agent — State Machine
@@ -23,6 +24,7 @@ export interface WorkerConfig {
   x402Url: string;
   topicIds: TopicIds;
   bidAmount?: number;
+  geminiWorker?: IGeminiWorkerService;
 }
 
 export class WorkerAgent {
@@ -33,6 +35,8 @@ export class WorkerAgent {
   private readonly x402Url: string;
   private readonly topicIds: TopicIds;
   private readonly bidAmount: number;
+
+  private readonly geminiWorker: IGeminiWorkerService | null;
 
   private currentBounty: BountyMessage | null = null;
   private lastResult: PriceData | null = null;
@@ -45,6 +49,7 @@ export class WorkerAgent {
     this.x402Url = config.x402Url;
     this.topicIds = config.topicIds;
     this.bidAmount = config.bidAmount ?? 50;
+    this.geminiWorker = config.geminiWorker ?? null;
   }
 
   getState(): WorkerState {
@@ -133,8 +138,8 @@ export class WorkerAgent {
     // Step 1: Submit bid
     await this.submitBid(bounty);
 
-    // Step 2: Execute task (x402 price fetch)
-    const priceData = await this.executeTask();
+    // Step 2: Execute task (Gemini-driven or legacy x402)
+    const priceData = await this.executeTask(bounty);
 
     // Step 3: Submit result
     await this.submitResult(bounty, priceData);
@@ -159,11 +164,27 @@ export class WorkerAgent {
     );
   }
 
-  // ── Task execution (x402 price fetch) ──
+  // ── Task execution (Gemini 2.5 Flash + Hedera Agent Kit or legacy x402) ──
 
-  private async executeTask(): Promise<PriceData> {
+  private async executeTask(bounty: BountyMessage): Promise<PriceData> {
     this.transition(WorkerState.EXECUTING);
 
+    if (this.geminiWorker) {
+      console.log(
+        `[worker:${this.workerId}] Executing via Gemini 2.5 Flash — task: "${bounty.description}"`,
+      );
+      const priceData = await this.geminiWorker.executeWithDescription(
+        bounty.description,
+        { taskId: bounty.taskId, reward: bounty.reward },
+      );
+      console.log(
+        `[worker:${this.workerId}] Gemini result — ${priceData.sources.join(", ")} avg: $${priceData.average}`,
+      );
+      this.lastResult = priceData;
+      return priceData;
+    }
+
+    // Legacy path — utilisé quand geminiWorker n'est pas injecté (ex: worker-mock)
     console.log(`[worker:${this.workerId}] Fetching BTC price via x402 at ${this.x402Url}`);
 
     const { priceData, paymentResponse } = await fetchWithPayment(
@@ -238,6 +259,7 @@ async function main(): Promise<void> {
     "../config/hedera.js"
   );
   const { HCSService } = await import("../services/hcs.js");
+  const { createGeminiWorkerService } = await import("../services/gemini-worker.js");
 
   const client = createHederaClient();
   const topicIds = loadTopicIds();
@@ -245,13 +267,22 @@ async function main(): Promise<void> {
   const x402Url = process.env.X402_SERVER_URL || "http://localhost:4020";
 
   const hcsService = new HCSService(client);
+  const paymentSigner = createMockPaymentSigner(workerConfig.accountId);
+  const x402FullUrl = `${x402Url}/api/v1/btc-price`;
+
+  // Factory : active GeminiWorkerService si GEMINI_API_KEY est présent, sinon Mock
+  const geminiWorker = createGeminiWorkerService(x402FullUrl, paymentSigner, {
+    hederaAccountId: workerConfig.accountId,
+    hederaPrivateKey: workerConfig.privateKey,
+  });
 
   const worker = new WorkerAgent({
     workerId: workerConfig.accountId,
     hcsService,
-    paymentSigner: createMockPaymentSigner(workerConfig.accountId),
-    x402Url: `${x402Url}/api/v1/btc-price`,
+    paymentSigner,
+    x402Url: x402FullUrl,
     topicIds,
+    geminiWorker,
   });
 
   // Graceful shutdown
