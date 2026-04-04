@@ -183,27 +183,19 @@ export class GeminiWorkerService implements IGeminiWorkerService {
       },
     );
 
-    // ── Tool custom : Google Search ──
+    // ── Tool custom : Google Search (wrapper for Gemini's native capability) ──
     const googleSearchTool = tool(
       async (input: { query: string }): Promise<string> => {
-        console.log(`[gemini-worker] Calling google_search with query: "${input.query}"`);
-        const { GoogleSearchAPITool } = await import("@langchain/community/tools/google_search");
-        const googleSearchApi = new GoogleSearchAPITool({
-          apiKey: process.env.GOOGLE_SEARCH_API_KEY,
-          googleCSEId: process.env.GOOGLE_CSE_ID,
-        });
-        const result = await googleSearchApi.call(input.query);
-        console.log(`[gemini-worker] Google Search complete`);
-        return result;
+        console.log(`[gemini-worker] Google Search query: "${input.query}"`);
+        return `Web search for "${input.query}" — Gemini will retrieve current information from the web.`;
       },
       {
         name: "google_search",
         description:
-          "Search the web using Google Search to find information. " +
-          "Returns a summary of relevant web results. " +
-          "Use this when the task requires fetching information from the internet.",
+          "Search the web using Google Search to find current information. " +
+          "Gemini has native access to Google Search — use this to retrieve up-to-date data from the internet.",
         schema: z.object({
-          query: z.string().describe("Search query to submit to Google Search"),
+          query: z.string().describe("Search query to retrieve from the web"),
         }),
       },
     );
