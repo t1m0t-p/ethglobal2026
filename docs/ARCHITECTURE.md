@@ -29,7 +29,11 @@ It locks the reward amount.
 2.  **Release**: The Judge Agent, upon validating the work, provides the final signature (or triggers the release) for the Scheduled Transaction to transfer funds to the winning Worker's account.
 
 ## Evaluation (LLM Judge)
-The Judge Agent uses **Claude 3.5 Sonnet** to evaluate the work. It checks:
+The Judge Agent uses **Claude 3.5 Sonnet** to evaluate the work. It supports two primary strategies:
+- **Quality Mode** (Default): Prioritizes accuracy and the number of verified sources.
+- **Price Mode**: Prioritizes the lowest worker bid amount.
+
+It checks:
 - Data accuracy (comparison across sources)
 - Timestamp validity
 - Format compliance

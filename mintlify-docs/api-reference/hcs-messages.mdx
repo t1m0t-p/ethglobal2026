@@ -20,7 +20,9 @@ Published by a **Requester** to HCS Topic A.
   "description": "Fetch BTC price from 3 sources, return average",
   "reward": 100,
   "deadline": "2026-04-04T12:05:30Z",
-  "requesterAddress": "0.0.12345"
+  "requesterAddress": "0.0.12345",
+  "strategy": "quality",
+  "category": "crypto-price"
 }
 ```
 
@@ -32,6 +34,8 @@ Published by a **Requester** to HCS Topic A.
 | `reward` | `number` | HBAR amount to be paid upon completion |
 | `deadline` | `string` | ISO 8601 timestamp after which no bids are accepted |
 | `requesterAddress` | `string` | Hedera account ID of the Requester |
+| `strategy` | `enum` | **`quality`** (default- best result wins) or **`price`** (cheapest bid wins) |
+| `category` | `string` | Optional label for display/filtering (e.g. `travel`, `delivery`) |
 
 ## 2. Bid Message (`bid`)
 
