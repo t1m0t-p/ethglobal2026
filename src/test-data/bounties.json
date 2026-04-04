@@ -1,0 +1,18 @@
+[
+  {
+    "type": "bounty",
+    "taskId": "btc-price-fetch-001",
+    "description": "Fetch BTC price from 3 sources, return average",
+    "reward": 100,
+    "deadline": "2026-04-06T12:00:00Z",
+    "requesterAddress": "0.0.12345"
+  },
+  {
+    "type": "bounty",
+    "taskId": "btc-price-fetch-002",
+    "description": "Fetch BTC price from 3 sources, return average (round 2)",
+    "reward": 150,
+    "deadline": "2026-04-06T18:00:00Z",
+    "requesterAddress": "0.0.12345"
+  }
+]
