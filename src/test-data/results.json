@@ -1,0 +1,22 @@
+[
+  {
+    "type": "result",
+    "taskId": "btc-price-fetch-001",
+    "workerId": "0.0.55555",
+    "data": {
+      "sources": ["coinbase", "kraken", "binance"],
+      "prices": [45230.50, 45231.20, 45229.80],
+      "average": 45230.50
+    }
+  },
+  {
+    "type": "result",
+    "taskId": "btc-price-fetch-001",
+    "workerId": "0.0.66666",
+    "data": {
+      "sources": ["coinbase", "kraken", "binance"],
+      "prices": [45230.10, 45231.50, 45229.90],
+      "average": 45230.50
+    }
+  }
+]
