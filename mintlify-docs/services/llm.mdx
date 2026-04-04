@@ -1,0 +1,152 @@
+---
+title: "LLM Service"
+sidebarTitle: "LLM"
+description: "LLM integration for impartial task evaluation — with a deterministic algorithmic fallback."
+icon: "brain"
+---
+
+## Overview
+
+The LLM Service powers the Judge's evaluation engine. It takes competing worker submissions and produces a structured `JudgeEvaluation` that determines the winner.
+
+Two implementations are available:
+- **`LLMService`** — Calls the remote LLM API
+- **`MockLLMService`** — Deterministic algorithmic evaluation
+
+## Evaluation Interface
+
+```typescript
+interface JudgeEvaluation {
+  winnerId: string;                    // Must match a submitted workerId
+  reason: string;                      // Human-readable explanation
+  confidence: "HIGH" | "MEDIUM" | "LOW";  // Evaluation certainty
+}
+```
+
+## Real Implementation (`LLMService`)
+
+### Initialization
+
+```typescript
+const llm = new LLMService(
+  process.env.LLM_API_KEY,
+  "default-model-name"  // optional
+);
+```
+
+### Prompt Design
+
+The prompt is engineered for **determinism** and **structured output**:
+
+```
+You are an impartial judge evaluating BTC price submissions from AI worker agents.
+
+TASK: {description} (ID: {taskId})
+
+SUBMISSIONS:
+Worker 1: ID="0.0.WORKER_1"
+  Sources: coingecko, kraken, binance
+  Prices: 67150, 67155.3, 67148.2
+  Average: 67151.17
+
+Worker 2: ID="0.0.WORKER_2"
+  Sources: coingecko, kraken
+  Prices: 67100, 67350
+  Average: 67225
+
+EVALUATION CRITERIA (priority order):
+1. More price sources is better (3 > 2 > 1)
+2. Lower inter-source price variance is better
+3. If still tied, the worker with more sources wins
+
+To compute variance: for each submission, calculate the average of 
+(price - mean)^2 across all its prices.
+
+Respond ONLY with this JSON object and nothing else:
+{"winnerId": "<exact workerId>", "reason": "<one sentence>", "confidence": "<HIGH|MEDIUM|LOW>"}
+```
+
+<Note>
+  Key design decisions:
+  - **Temperature 0** — Maximizes determinism across runs
+  - **Max 256 tokens** — Forces concise output, prevents rambling
+  - **Explicit JSON schema** — No markdown fences or extra text
+  - **Exact workerId requirement** — Prevents hallucinated IDs
+</Note>
+
+### Response Parsing
+
+```typescript
+const rawText = message.content[0].text.trim();
+
+// Strip accidental markdown code fences
+const jsonText = rawText
+  .replace(/^```(?:json)?\n?/, "")
+  .replace(/\n?```$/, "")
+  .trim();
+
+const parsed = JSON.parse(jsonText) as JudgeEvaluation;
+
+// Validate winnerId is an actual submitted worker
+const validIds = results.map(r => r.workerId);
+if (!validIds.includes(parsed.winnerId)) {
+  throw new Error(`LLM returned unknown winnerId: ${parsed.winnerId}`);
+}
+```
+
+### Graceful Fallback
+
+If the LLM returns invalid JSON or an unknown winnerId, the system **automatically falls back** to the algorithmic evaluator:
+
+```typescript
+try {
+  const parsed = JSON.parse(jsonText);
+  // validate winnerId...
+} catch (err) {
+  console.warn(`JSON parse failed — falling back to algorithmic evaluation`);
+  return new MockLLMService().evaluate(taskId, taskDescription, results);
+}
+```
+
+## Mock Implementation (`MockLLMService`)
+
+The algorithmic evaluator uses a simple scoring system:
+
+### Scoring Algorithm
+
+```typescript
+async evaluate(taskId, taskDescription, results): Promise<JudgeEvaluation> {
+  const scored = results.map(r => {
+    // Compute inter-source price variance
+    const variance = r.data.prices.reduce(
+      (sum, p) => sum + Math.pow(p - r.data.average, 2), 0
+    ) / r.data.prices.length;
+    
+    return { result: r, sourcesCount: r.data.sources.length, variance };
+  });
+
+  // Sort: more sources first, then lower variance
+  scored.sort((a, b) => {
+    if (b.sourcesCount !== a.sourcesCount) 
+      return b.sourcesCount - a.sourcesCount;
+    return a.variance - b.variance;
+  });
+
+  const winner = scored[0].result;
+  return {
+    winnerId: winner.workerId,
+    reason: `Most price sources (${scored[0].sourcesCount}) with lowest variance (${scored[0].variance.toFixed(2)})`,
+    confidence: "HIGH",
+  };
+}
+```
+
+### Why Variance Matters
+
+| Scenario | Worker A | Worker B | Winner |
+|---|---|---|---|
+| Different source counts | 3 sources | 2 sources | **A** (more sources) |
+| Same sources, different variance | \[45000, 45001\] (var: 0.25) | \[45000, 45100\] (var: 2500) | **A** (lower variance) |
+| Same everything | \[45000\] | \[45000\] | **A** (first entry) |
+
+Low variance between price sources indicates that the data is **more trustworthy** — the sources agree with each other.

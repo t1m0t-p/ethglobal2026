@@ -1,0 +1,158 @@
+---
+title: "Environment Setup"
+sidebarTitle: "Environment Setup"
+description: "Configure Hedera Testnet credentials, HCS topics, and API keys for running agents against the real network."
+icon: "key"
+---
+
+## Prerequisites
+
+| Tool | Required Version | Purpose |
+|---|---|---|
+| Node.js | ≥ 18.x (22+ recommended) | Runtime |
+| npm | ≥ 9.x | Package manager |
+| Git | Any | Clone the repo |
+| Hedera Portal Account | — | Create testnet accounts |
+| LLM API Key | — | LLM Judge (optional) |
+
+## Step 1: Create Hedera Testnet Accounts
+
+You need **4 separate Hedera accounts** (one per agent role):
+
+<Steps>
+  <Step title="Go to the Hedera Portal">
+    Visit [portal.hedera.com](https://portal.hedera.com) and create a free account.
+  </Step>
+  <Step title="Create 4 Testnet accounts">
+    In the Portal dashboard, create accounts for:
+    - **Operator** (main account for topic creation)
+    - **Requester** (posts bounties and creates escrow)
+    - **Worker** (bids and executes tasks)
+    - **Judge** (evaluates results and releases payment)
+  </Step>
+  <Step title="Request Testnet HBAR">
+    Use the [Hedera Faucet](https://testnet.hedera.com/) to fund each account with testnet HBAR.
+    Recommended: **1000 HBAR per account** for comfortable testing.
+  </Step>
+  <Step title="Note the Account IDs and Private Keys">
+    You'll need:
+    - Account ID format: `0.0.XXXXX`
+    - Private Key format: `302e...` (DER-encoded)
+  </Step>
+</Steps>
+
+## Step 2: Create HCS Topics
+
+Run the topic creation script:
+
+```bash
+# First, set at least HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY in .env
+npm run topics:create
+```
+
+Output:
+
+```
+═══════════════════════════════════════════
+  Hivera — HCS Topic Setup
+═══════════════════════════════════════════
+
+Creating bounties topic... ✓ 0.0.12001
+Creating bids topic...     ✓ 0.0.12002
+Creating results topic...  ✓ 0.0.12003
+Creating verdicts topic... ✓ 0.0.12004
+
+─── Add these to your .env file ──────────
+HCS_BOUNTY_TOPIC_ID=0.0.12001
+HCS_BID_TOPIC_ID=0.0.12002
+HCS_RESULT_TOPIC_ID=0.0.12003
+HCS_VERDICT_TOPIC_ID=0.0.12004
+──────────────────────────────────────────
+```
+
+## Step 3: Configure `.env`
+
+Copy the example and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+```env
+# Hedera Testnet Credentials (operator / main account)
+HEDERA_ACCOUNT_ID=0.0.XXXXX
+HEDERA_PRIVATE_KEY=302e...
+HEDERA_NETWORK=testnet
+
+# HCS Topic IDs (from Step 2)
+HCS_BOUNTY_TOPIC_ID=0.0.12001
+HCS_BID_TOPIC_ID=0.0.12002
+HCS_RESULT_TOPIC_ID=0.0.12003
+HCS_VERDICT_TOPIC_ID=0.0.12004
+
+# Worker Agent
+WORKER_ACCOUNT_ID=0.0.XXXXX
+WORKER_PRIVATE_KEY=302e...
+
+# Requester Agent
+REQUESTER_ACCOUNT_ID=0.0.XXXXX
+REQUESTER_PRIVATE_KEY=302e...
+
+# Judge Agent
+JUDGE_ACCOUNT_ID=0.0.XXXXX
+JUDGE_PRIVATE_KEY=302e...
+
+# LLM API (optional — falls back to algorithmic evaluation)
+LLM_API_KEY=sk-llm-...
+
+# x402 Mock Server
+X402_SERVER_PORT=4020
+X402_SERVER_URL=http://localhost:4020
+
+# Judge tuning
+RESULTS_WAIT_MS=30000
+```
+
+<Warning>
+  **Never commit your `.env` file!** It contains private keys. 
+  The `.gitignore` should already exclude it.
+</Warning>
+
+## Step 4: Verify Setup
+
+```bash
+# Type-check the project
+npm run build
+
+# Run tests
+npm test
+
+# Run the mock demo (no Hedera needed)
+npm run demo
+```
+
+## Step 5: Run Against Hedera
+
+Open **3 terminal windows** and run each agent:
+
+```bash
+# Terminal 1: Start x402 mock server + Requester
+npm run x402-server &
+npm run requester
+
+# Terminal 2: Start Worker
+npm run worker
+
+# Terminal 3: Start Judge
+npm run judge
+```
+
+The Requester will post a bounty, the Worker will discover and execute it, and the Judge will evaluate and release payment — all on Hedera Testnet!
+
+## Verify on HashScan
+
+After running, check your transactions on [HashScan](https://hashscan.io/testnet):
+
+- **HCS Messages**: Search for your topic IDs to see published bounties, bids, results, and verdicts
+- **Scheduled Transactions**: Search for the schedule ID from the escrow to verify lock and release
+- **HBAR Transfers**: Check account balances to confirm payment flow

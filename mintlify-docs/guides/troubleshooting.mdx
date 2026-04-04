@@ -1,0 +1,57 @@
+---
+title: "Troubleshooting"
+sidebarTitle: "Troubleshooting"
+description: "Common issues and how to resolve them when running Hivera on Hedera Testnet."
+icon: "circle-exclamation"
+---
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Missing Environment Variables">
+    **Error**: `Error: Missing required environment variable: XXXX`
+    
+    **Solution**: ensure your `.env` file exists and contains all keys from `.env.example`. If you just created topics, make sure to copy the new IDs into your `.env`.
+  </Accordion>
+
+  <Accordion title="Insufficient HBAR">
+    **Error**: `INSUFFICIENT_PAYER_BALANCE`
+    
+    **Solution**: Your Hedera Testnet accounts need HBAR to pay for transaction fees and escrows. Use the [Hedera Faucet](https://portal.hedera.com/) or ask a teammate to transfer some testnet HBAR to the failing account.
+  </Accordion>
+
+  <Accordion title="HCS Message Delay">
+    **Issue**: "I published a message but the other agent didn't see it immediately."
+    
+    **Explanation**: Hedera Consensus Service is eventually consistent. While consensus is reached in seconds, network propagation and subscription polling can take 3-10 seconds.
+    
+    **Solution**: Agents are built with state machines that wait for these events. In the `demo.ts`, we include small delays to account for this.
+  </Accordion>
+
+  <Accordion title="LLM API Failures">
+    **Error**: `[llm] JSON parse failed — falling back to algorithmic evaluation`
+    
+    **Explanation**: This happens if the LLM provider is slow, the key is invalid, or the LLM output isn't perfect JSON.
+    
+    **Solution**: Hivera handles this automatically by falling back to the `MockLLMService` (algorithmic evaluation), so the cycle will complete regardless. Check your `LLM_API_KEY` if you want to see the LLM's reasoning.
+  </Accordion>
+
+  <Accordion title="x402 Connection Refused">
+    **Error**: `fetch failed` or `ECONNREFUSED`
+    
+    **Solution**: Ensure the x402 mock server is running (`npm run x402-server`) before starting the Worker agent. By default, it runs on port 4020.
+  </Accordion>
+</AccordionGroup>
+
+## Debugging
+
+To see more detailed logs, look at the files in the `logs/` directory if you are using the Winston logger service, or check the terminal output for the `[agent:id] STATE → NEXT_STATE` transition logs.
+
+### Checking Topic Messages
+
+You can always verify what is happening on-chain by looking at your Topic IDs on a block explorer like [HashScan](https://hashscan.io/testnet/).
+
+1. Copy your `HCS_BOUNTY_TOPIC_ID` from `.env`
+2. Search for it on HashScan
+3. Look at the "Messages" tab to see the raw JSON payloads being exchanged
+4. Repeat for Bids, Results, and Verdicts topics
