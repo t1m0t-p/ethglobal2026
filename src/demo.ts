@@ -22,7 +22,8 @@ import { HCSService } from "./services/hcs.js";
 import { EscrowService, MockEscrowService } from "./services/escrow.js";
 import { LLMService } from "./services/llm.js";
 import { createMockPaymentSigner } from "./services/x402-client.js";
-import { createHederaClient, loadTopicIds, loadJudgeConfig } from "./config/hedera.js";
+import { createHederaClient, loadTopicIds, loadJudgeConfig, loadWorker2Config } from "./config/hedera.js";
+import { createGeminiWorkerService } from "./services/gemini-worker.js";
 import { PrivateKey } from "@hiero-ledger/sdk";
 
 const X402_PORT = parseInt(process.env.X402_SERVER_PORT || "4020", 10);
@@ -82,6 +83,24 @@ async function main(): Promise<void> {
     bidAmount: 50,
   });
 
+  const worker2Config = loadWorker2Config();
+  const worker2PaymentSigner = createMockPaymentSigner(worker2Config.accountId);
+  const worker2GeminiService = createGeminiWorkerService(X402_URL, worker2PaymentSigner, {
+    geminiApiKey: worker2Config.geminiApiKey,
+    hederaAccountId: worker2Config.accountId,
+    hederaPrivateKey: worker2Config.privateKey,
+  });
+
+  const worker2 = new WorkerAgent({
+    workerId: worker2Config.accountId,
+    hcsService,
+    paymentSigner: worker2PaymentSigner,
+    x402Url: X402_URL,
+    topicIds,
+    bidAmount: 50,
+    geminiWorker: worker2GeminiService,
+  });
+
   const judge = new JudgeAgent({
     accountId: judgeConfig.accountId,
     hcsService,
@@ -96,6 +115,7 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => {
     console.log("\nShutting down...");
     worker.stop();
+    worker2.stop();
     judge.stop();
     x402Server.close();
     process.exit(0);
@@ -106,6 +126,7 @@ async function main(): Promise<void> {
   console.log("▶ Starting Judge and Worker agents...");
   await judge.start();
   await worker.start();
+  await worker2.start();
   console.log("  Agents subscribed to HCS topics\n");
 
   // Small delay to ensure all subscriptions are established
@@ -146,6 +167,7 @@ async function main(): Promise<void> {
   console.log("╚══════════════════════════════════════════════╝\n");
 
   worker.stop();
+  worker2.stop();
   judge.stop();
   x402Server.close();
   client.close();

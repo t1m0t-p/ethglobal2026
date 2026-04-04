@@ -50,6 +50,22 @@ export function loadWorkerConfig(): { accountId: string; privateKey: string } {
   };
 }
 
+export function loadWorker2Config(): {
+  accountId: string;
+  privateKey: string;
+  geminiApiKey: string | undefined;
+} {
+  return {
+    accountId:
+      process.env.WORKER2_ACCOUNT_ID ||
+      envWithFallback("WORKER_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
+    privateKey:
+      process.env.WORKER2_PRIVATE_KEY ||
+      envWithFallback("WORKER_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
+    geminiApiKey: process.env.WORKER2_GEMINI_API_KEY,
+  };
+}
+
 export function loadRequesterConfig(): { accountId: string; privateKey: string } {
   return {
     accountId: envWithFallback("REQUESTER_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
