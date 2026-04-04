@@ -95,56 +95,60 @@ private handleResult(result: ResultMessage): void {
 
 ## LLM Evaluation
 
-The Judge uses a specific **LLM** with a structured prompt to evaluate submissions:
+The Judge supports two evaluation strategies defined by the Requester's bounty:
+
+### 1. Quality Mode (Default)
+Prioritizes high-precision data from multiple sources.
+1. More price sources is better (3 > 2 > 1).
+2. Lower inter-source variance is better (tighter agreement).
+3. If still tied, the worker with more sources wins.
+
+### 2. Price Mode
+Prioritizes cost-efficiency for the Requester.
+1. Lower bid amount wins (cheapest task execution).
+2. If tied on bid, quality (sources/variance) acts as a tiebreaker.
 
 ### Prompt Engineering
 
+The dynamic prompt factors in the requested strategy and worker bids:
+
 ```
-You are an impartial judge evaluating BTC price submissions from AI worker agents.
+You are an impartial judge evaluating submissions from AI worker agents.
 
 TASK: {description} (ID: {taskId})
+STRATEGY: {strategy}
 
 SUBMISSIONS:
 Worker 1: ID="0.0.WORKER_1"
   Sources: coingecko, kraken, binance
-  Prices: 67150, 67155.3, 67148.2
   Average: 67151.17
+  Bid Amount: 50 HBAR
 
-Worker 2: ID="0.0.WORKER_2"
-  Sources: coingecko, kraken
-  Prices: 67100, 67350
-  Average: 67225
-
-EVALUATION CRITERIA (priority order):
-1. More price sources is better (3 > 2 > 1)
-2. Lower inter-source price variance is better
-3. If still tied, the worker with more sources wins
+{criteria_by_strategy}
 
 Respond ONLY with this JSON object:
-{"winnerId": "<exact workerId>", "reason": "<one sentence>", "confidence": "<HIGH|MEDIUM|LOW>"}
-```
-
-### Evaluation Response
-
-```typescript
-interface JudgeEvaluation {
-  winnerId: string;   // Must match a submitted workerId
-  reason: string;     // Human-readable explanation
-  confidence: "HIGH" | "MEDIUM" | "LOW";
-}
+{"winnerId": "<workerId>", "reason": "<sentence>", "confidence": "HIGH|MEDIUM|LOW"}
 ```
 
 ### Algorithmic Fallback
 
-If the LLM returns unparseable JSON or an invalid `winnerId`, the system falls back to a **deterministic algorithmic evaluation**:
+If the LLM returns unparseable JSON or an invalid `winnerId`, the Judge uses a **deterministic algorithmic evaluation**:
 
 ```typescript
-// Sort by: sources DESC, then variance ASC
-scored.sort((a, b) => {
-  if (b.sourcesCount !== a.sourcesCount) 
-    return b.sourcesCount - a.sourcesCount;
-  return a.variance - b.variance;
-});
+if (strategy === "price") {
+  // Lowest bid first, then quality as tiebreaker
+  scored.sort((a, b) => {
+    if (a.bidAmount !== b.bidAmount) return a.bidAmount - b.bidAmount;
+    if (b.sourcesCount !== a.sourcesCount) return b.sourcesCount - a.sourcesCount;
+    return a.variance - b.variance;
+  });
+} else {
+  // Quality mode: sources DESC, then variance ASC
+  scored.sort((a, b) => {
+    if (b.sourcesCount !== a.sourcesCount) return b.sourcesCount - a.sourcesCount;
+    return a.variance - b.variance;
+  });
+}
 ```
 
 This ensures the Judge **never fails to produce a verdict**, even if the LLM provider is down.
