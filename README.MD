@@ -19,9 +19,14 @@ Hivera implements a three-agent labor cycle coordinated via **HCS**:
 1.  **Clone & Install**:
     ```bash
     git clone https://github.com/t1m0t-p/ethglobal2026.git
+    cd ethglobal2026
     npm install
     ```
-2.  **Environment**: Copy `.env.example` to `.env` and configure your Hedera Testnet keys.
+2.  **Setup Environment**:
+    ```bash
+    # Set HEDERA_ACCOUNT_ID, HEDERA_PRIVATE_KEY, and CLAUDE_API_KEY in .env
+    npm run setup
+    ```
 3.  **Run Autonomous Demo**:
     ```bash
     npm run demo
@@ -52,7 +57,7 @@ Hivera implements a three-agent labor cycle coordinated via **HCS**:
 
 ## Contributors - The POCleaner Team
 
-| [<img src="https://github.com/Antoine0703.png?size=85" width=85><br><sub>Antoine</sub>](https://github.com/Antoine0703) | [<img src="https://github.com/PHILIPPEEwan.png?size=85" width=85><br><sub>PHILIPPE Ewan</sub>](https://github.com/PHILIPPEEwan) | [<img src="https://github.com/Manmohit509.png?size=85" width=85><br><sub>Manmohit-Singh Lal</sub>](https://github.com/Manmohit509) | [<img src="https://github.com/t1m0t-p.png?size=85" width=85><br><sub>Timothée Pasteau-Berthaud</sub>](https://github.com/t1m0t-p) 
+| [<img src="https://github.com/Antoine0703.png?size=85" width=85><br><sub>BEAL Antoine</sub>](https://github.com/Antoine0703) | [<img src="https://github.com/PHILIPPEEwan.png?size=85" width=85><br><sub>PHILIPPE Ewan</sub>](https://github.com/PHILIPPEEwan) | [<img src="https://github.com/Manmohit509.png?size=85" width=85><br><sub>Manmohit-Singh Lal</sub>](https://github.com/Manmohit509) | [<img src="https://github.com/t1m0t-p.png?size=85" width=85><br><sub>Timothée Pasteau-Berthaud</sub>](https://github.com/t1m0t-p) 
 | :---: | :---: | :---: | :---: |
 
 <h2 align=center>
