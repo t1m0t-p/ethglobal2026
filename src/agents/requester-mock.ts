@@ -3,6 +3,7 @@ import { RequesterState } from "../types/index.js";
 import { MockHCSService } from "../services/hcs.js";
 import { MockEscrowService } from "../services/escrow.js";
 import { RequesterAgent } from "./requester.js";
+import { PrivateKey } from "@hiero-ledger/sdk";
 
 // ──────────────────────────────────────────────
 // Requester Mock — Full E2E test with no external deps
@@ -53,8 +54,11 @@ async function runMockTest(): Promise<void> {
   const mockEscrow = new MockEscrowService();
 
   // Step 2: Create requester agent with injected mocks
+  const mockPrivateKey = PrivateKey.generate();
+
   const requester = new RequesterAgent({
     accountId: REQUESTER_ID,
+    privateKey: mockPrivateKey,
     hcsService: mockHCS,
     topicIds: MOCK_TOPIC_IDS,
     escrowService: mockEscrow,
@@ -121,9 +125,9 @@ async function runMockTest(): Promise<void> {
     "Escrow has correct taskId",
   );
   assert(escrowInfo!.amount === MOCK_BOUNTY_PARAMS.reward, "Escrow amount matches reward");
-  assert(mockEscrow.isReleased(escrowInfo!.scheduleId) === false, "Escrow not yet released");
+  assert(mockEscrow.isReleased(escrowInfo!.taskId) === false, "Escrow not yet released");
 
-  console.log(`\n  Escrow: ${escrowInfo!.scheduleId} — ${escrowInfo!.amount} HBAR locked`);
+  console.log(`\n  Escrow: ${escrowInfo!.escrowAccountId} — ${escrowInfo!.amount} HBAR locked`);
 
   // Step 7: Simulate a third bid — should be ignored (already at max)
   console.log("\n▶ Simulating excess bid (should be ignored)...");

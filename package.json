@@ -15,7 +15,11 @@
     "topics:create": "tsx src/scripts/create-topics.ts",
     "setup": "tsx src/scripts/setup.ts",
     "demo": "tsx src/demo.ts",
-    "requester:interactive": "tsx src/interactive-requester.ts"
+    "demo:real": "tsx src/demo-real.ts",
+    "requester:interactive": "tsx src/interactive-requester.ts",
+    "launch": "./scripts/launch.sh",
+    "launch:mock": "./scripts/launch.sh mock",
+    "launch:demo": "./scripts/launch.sh demo"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

@@ -54,10 +54,9 @@ const MOCK_RESULT_2: ResultMessage = {
 };
 
 const MOCK_ESCROW: EscrowInfo = {
-  scheduleId: "0.0.MOCK_SCHEDULE_999",
+  escrowAccountId: "0.0.MOCK_ESCROW_ACCOUNT",
   taskId: "btc-price-fetch-001",
   amount: 100,
-  recipientAddress: "0.0.MOCK_WORKER_1",
 };
 
 const RESULTS_WAIT_MS = 500; // Fast for testing (vs 30s in production)
@@ -144,9 +143,10 @@ async function runMockTest(): Promise<void> {
 
   // Step 10: Verify escrow was released
   console.log("\n▶ Verifying escrow release...");
+  const releaseInfo = mockEscrow.getRelease(MOCK_ESCROW.taskId);
   assert(
-    mockEscrow.isReleased(MOCK_ESCROW.scheduleId),
-    `Escrow schedule ${MOCK_ESCROW.scheduleId} was released`,
+    releaseInfo !== undefined && releaseInfo.winnerId === MOCK_RESULT_1.workerId,
+    `Escrow released to correct winner (${MOCK_RESULT_1.workerId})`,
   );
 
   console.log(`\n  Verdict summary:`);
@@ -237,10 +237,9 @@ async function runPriceModeTest(): Promise<void> {
   };
 
   const escrow: EscrowInfo = {
-    scheduleId: "0.0.MOCK_SCHEDULE_PRICE",
+    escrowAccountId: "0.0.MOCK_ESCROW_ACCOUNT",
     taskId: "price-mode-001",
     amount: 80,
-    recipientAddress: "0.0.MOCK_WORKER_1",
   };
 
   judge.setEscrowInfo(priceBounty.taskId, escrow);

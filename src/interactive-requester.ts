@@ -237,7 +237,7 @@ export class InteractiveRequester {
 // ──────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { createHederaClient, loadTopicIds, loadRequesterConfig } = await import(
+  const { createHederaClient, loadTopicIds, loadRequesterConfig, loadEscrowConfig } = await import(
     "./config/hedera.js"
   );
   const { HCSService } = await import("./services/hcs.js");
@@ -247,11 +247,13 @@ async function main(): Promise<void> {
   const client = createHederaClient();
   const topicIds = loadTopicIds();
   const requesterConfig = loadRequesterConfig();
+  const escrowConfig = loadEscrowConfig();
 
   const hcsService = new HCSService(client);
   const escrowService = new RealEscrowService(
     client,
-    PrivateKey.fromStringDer(requesterConfig.privateKey),
+    escrowConfig.escrowAccountId,
+    PrivateKey.fromStringDer(escrowConfig.escrowPrivateKey),
   );
 
   const apiPort = process.env.REQUESTER_API_PORT
@@ -261,6 +263,7 @@ async function main(): Promise<void> {
   const interactive = new InteractiveRequester(
     {
       accountId: requesterConfig.accountId,
+      privateKey: PrivateKey.fromStringDer(requesterConfig.privateKey),
       hcsService,
       topicIds,
       escrowService,
@@ -276,8 +279,9 @@ async function main(): Promise<void> {
 }
 
 // Run if executed directly
+import { fileURLToPath } from "url";
 const isDirectRun =
-  process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"));
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isDirectRun) {
   main().catch((err) => {

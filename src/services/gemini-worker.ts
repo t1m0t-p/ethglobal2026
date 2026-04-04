@@ -55,7 +55,7 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     geminiApiKey: string,
     hederaAccountId: string,
     hederaPrivateKey: string,
-    timeoutMs = 60_000,
+    timeoutMs = 120_000,
   ) {
     this.x402Url = x402Url;
     this.paymentSigner = paymentSigner;
@@ -183,6 +183,41 @@ export class GeminiWorkerService implements IGeminiWorkerService {
       },
     );
 
+    // ── Tool custom : Google Search (via @google/generative-ai googleSearchRetrieval) ──
+    const geminiApiKeyForSearch = this.geminiApiKey;
+    const googleSearchTool = tool(
+      async (input: { query: string }): Promise<string> => {
+        console.log(`[gemini-worker] Google Search: "${input.query}"`);
+        try {
+          const { GoogleGenerativeAI } = await import("@google/generative-ai");
+          const genAI = new GoogleGenerativeAI(geminiApiKeyForSearch);
+          const searchModel = genAI.getGenerativeModel({
+            model: "gemini-2.5-flash",
+            tools: [{ google_search: {} } as any],
+          });
+          const result = await searchModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: input.query }] }],
+          });
+          const text = result.response.text();
+          console.log(`[gemini-worker] Search result (${text.length} chars): ${text.slice(0, 150)}...`);
+          return text;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[gemini-worker] Google Search failed: ${msg}`);
+          return `Search failed: ${msg}`;
+        }
+      },
+      {
+        name: "google_search",
+        description:
+          "Search the web using Google Search to find current real-world information. " +
+          "Returns a text summary of search results. Use this for flight prices, travel info, news, etc.",
+        schema: z.object({
+          query: z.string().describe("Search query to retrieve from the web"),
+        }),
+      },
+    );
+
     // ── LLM — Gemini 2.5 Flash ──
     const llm = new ChatGoogleGenerativeAI({
       model: "gemini-2.5-flash",
@@ -191,14 +226,20 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     });
 
     // ── Agent ReAct ──
-    const allTools = [x402Tool, hcsPublishTool, hcsQueryTool] as Parameters<typeof createReactAgent>[0]["tools"];
+    const allTools = [x402Tool, hcsPublishTool, hcsQueryTool, googleSearchTool] as Parameters<typeof createReactAgent>[0]["tools"];
     const agent = createReactAgent({ llm, tools: allTools });
 
     const systemPrompt =
       `You are a Worker agent in a decentralized labor market on Hedera.\n` +
       `Your job is to complete the given task by calling the appropriate tools.\n` +
+      `Use google_search to find real-world information (flights, prices, news, etc.).\n` +
+      `Use x402_fetch_btc_price specifically for BTC/crypto price data.\n` +
       `When you have all the data needed, output ONLY a JSON object in this exact format and nothing else:\n` +
-      `{"sources": ["exchange1", "exchange2"], "prices": [12345.67, 12346.89], "average": 12346.28}\n` +
+      `{"sources": ["source1", "source2"], "prices": [123.45, 67.89], "average": 95.67}\n` +
+      `Where:\n` +
+      `- "sources": array of strings identifying data sources (exchanges, airlines, websites, routes, etc.)\n` +
+      `- "prices": array of numbers (prices found, e.g. ticket prices in EUR, BTC prices in USD, etc.)\n` +
+      `- "average": the best or most representative single price as a number\n` +
       `Do not add markdown fences. Do not add any text before or after the JSON object.`;
 
     const userPrompt =

@@ -10,6 +10,7 @@ import type {
 import { JudgeState } from "../types/index.js";
 import { EscrowService, MockEscrowService, type EscrowInfo } from "../services/escrow.js";
 import { LLMService, MockLLMService } from "../services/llm.js";
+import type { IHTSService } from "../services/hts.js";
 
 // ──────────────────────────────────────────────
 // Judge Agent — State Machine
@@ -21,19 +22,22 @@ export interface JudgeConfig {
   topicIds: TopicIds;
   llmService: LLMService | MockLLMService;
   escrowService: EscrowService | MockEscrowService;
+  htsService?: IHTSService; // optional — if provided, transfers HIVE tokens to winner on verdict
   resultsWaitMs?: number; // how long to collect results before evaluating (default 30_000)
 }
 
 export class JudgeAgent {
-  private state: JudgeState = JudgeState.IDLE;
+  private topLevelState: JudgeState = JudgeState.IDLE;
   private readonly accountId: string;
   private readonly hcs: IHCSService;
   private readonly topicIds: TopicIds;
   private readonly llmService: LLMService | MockLLMService;
   private readonly escrowService: EscrowService | MockEscrowService;
+  private readonly htsService?: IHTSService;
   private readonly resultsWaitMs: number;
 
-  // Per-task collections — Judge can handle multiple bounties sequentially
+  // Per-task collections — Judge can handle multiple bounties concurrently
+  private taskStates: Map<string, JudgeState> = new Map();
   private pendingResults: Map<string, ResultMessage[]> = new Map();
   private pendingBids: Map<string, BidMessage[]> = new Map();
   private activeBounties: Map<string, BountyMessage> = new Map();
@@ -49,11 +53,12 @@ export class JudgeAgent {
     this.topicIds = config.topicIds;
     this.llmService = config.llmService;
     this.escrowService = config.escrowService;
+    this.htsService = config.htsService;
     this.resultsWaitMs = config.resultsWaitMs ?? 30_000;
   }
 
   getState(): JudgeState {
-    return this.state;
+    return this.topLevelState;
   }
 
   getErrorReason(): string | null {
@@ -64,23 +69,29 @@ export class JudgeAgent {
     return this.lastVerdict;
   }
 
-  // Inject escrow info from the Requester (wired by the demo orchestrator)
+  // Inject escrow info from the Requester (wired by the demo orchestrator or callback)
   setEscrowInfo(taskId: string, info: EscrowInfo): void {
     this.escrowMap.set(taskId, info);
-    console.log(`[judge:${this.accountId}] Escrow registered for task ${taskId} — schedule: ${info.scheduleId}`);
+    console.log(`[judge:${this.accountId}] Escrow registered for task ${taskId} — account: ${info.escrowAccountId}`);
   }
 
   // ── State transitions ──
 
   private transition(to: JudgeState): void {
-    console.log(`[judge:${this.accountId}] ${this.state} → ${to}`);
-    this.state = to;
+    console.log(`[judge:${this.accountId}] ${this.topLevelState} → ${to}`);
+    this.topLevelState = to;
+  }
+
+  private transitionTask(taskId: string, to: JudgeState): void {
+    const from = this.taskStates.get(taskId) ?? JudgeState.IDLE;
+    console.log(`[judge:${this.accountId}] Task ${taskId}: ${from} → ${to}`);
+    this.taskStates.set(taskId, to);
   }
 
   private transitionToError(reason: string): void {
     this.errorReason = reason;
-    console.error(`[judge:${this.accountId}] ${this.state} → ERROR: ${reason}`);
-    this.state = JudgeState.ERROR;
+    console.error(`[judge:${this.accountId}] ${this.topLevelState} → ERROR: ${reason}`);
+    this.topLevelState = JudgeState.ERROR;
   }
 
   reset(): void {
@@ -88,6 +99,7 @@ export class JudgeAgent {
     for (const timer of this.evaluationTimers.values()) {
       clearTimeout(timer);
     }
+    this.taskStates.clear();
     this.pendingResults.clear();
     this.pendingBids.clear();
     this.activeBounties.clear();
@@ -101,9 +113,9 @@ export class JudgeAgent {
   // ── Main entrypoint ──
 
   async start(): Promise<void> {
-    if (this.state !== JudgeState.IDLE) {
+    if (this.topLevelState !== JudgeState.IDLE) {
       throw new Error(
-        `Cannot start judge in state ${this.state} — call reset() first`,
+        `Cannot start judge in state ${this.topLevelState} — call reset() first`,
       );
     }
 
@@ -158,9 +170,9 @@ export class JudgeAgent {
   // ── Result handling — collect + debounce timer ──
 
   private handleResult(result: ResultMessage): void {
-    if (this.state !== JudgeState.MONITORING) {
+    if (this.topLevelState !== JudgeState.MONITORING) {
       console.log(
-        `[judge:${this.accountId}] Ignoring result from ${result.workerId} — state: ${this.state}`,
+        `[judge:${this.accountId}] Ignoring result from ${result.workerId} — state: ${this.topLevelState}`,
       );
       return;
     }
@@ -188,7 +200,7 @@ export class JudgeAgent {
 
     this.evaluationTimers.set(result.taskId, timer);
     console.log(
-      `[judge:${this.accountId}] Evaluation timer reset — will evaluate in ${this.resultsWaitMs}ms`,
+      `[judge:${this.accountId}] Evaluation timer reset for task ${result.taskId} — will evaluate in ${this.resultsWaitMs}ms`,
     );
   }
 
@@ -205,7 +217,7 @@ export class JudgeAgent {
 
     const bounty = this.activeBounties.get(taskId);
 
-    this.transition(JudgeState.EVALUATING);
+    this.transitionTask(taskId, JudgeState.EVALUATING);
     console.log(
       `[judge:${this.accountId}] Evaluating ${results.length} result(s) for task ${taskId}...`,
     );
@@ -229,37 +241,47 @@ export class JudgeAgent {
       paymentAmount: bounty?.reward ?? 100,
     };
 
-    await this.postVerdict(verdict);
-    await this.releasePayment(verdict);
+    await this.postVerdict(verdict, taskId);
+    await this.releasePayment(verdict, taskId);
   }
 
-  private async postVerdict(verdict: VerdictMessage): Promise<void> {
-    this.transition(JudgeState.POSTING_VERDICT);
+  private async postVerdict(verdict: VerdictMessage, taskId: string): Promise<void> {
+    this.transitionTask(taskId, JudgeState.POSTING_VERDICT);
     await this.hcs.publish(this.topicIds.verdicts, verdict);
     this.lastVerdict = verdict;
     console.log(
-      `[judge:${this.accountId}] Verdict posted — winner: ${verdict.winnerId} — "${verdict.reason}"`,
+      `[judge:${this.accountId}] Verdict posted for task ${verdict.taskId} — winner: ${verdict.winnerId} — "${verdict.reason}"`,
     );
   }
 
-  private async releasePayment(verdict: VerdictMessage): Promise<void> {
-    this.transition(JudgeState.RELEASING);
+  private async releasePayment(verdict: VerdictMessage, taskId: string): Promise<void> {
+    this.transitionTask(taskId, JudgeState.RELEASING);
 
     const escrowInfo = this.escrowMap.get(verdict.taskId);
     if (!escrowInfo) {
       console.warn(
         `[judge:${this.accountId}] No escrow registered for task ${verdict.taskId} — skipping payment release`,
       );
-      this.transition(JudgeState.COMPLETED);
+      this.transitionTask(taskId, JudgeState.COMPLETED);
       return;
     }
 
-    const txnId = await this.escrowService.releaseEscrow(escrowInfo);
+    // 1. HTS token transfer → actual winner (HIVE reward)
+    if (this.htsService) {
+      const htsTxId = await this.htsService.transferToken(verdict.winnerId, verdict.paymentAmount);
+      console.log(
+        `[judge:${this.accountId}] HIVE token sent to winner ${verdict.winnerId} — txn: ${htsTxId}`,
+      );
+    }
+
+    // 2. Release HBAR from escrow account → actual winner
+    // The winner is now determined, so we transfer from the escrow account to the correct winner
+    const txnId = await this.escrowService.releaseEscrow(escrowInfo, verdict.winnerId);
     console.log(
-      `[judge:${this.accountId}] Payment released — ${verdict.paymentAmount} HBAR to ${verdict.winnerId} — txn: ${txnId}`,
+      `[judge:${this.accountId}] HBAR escrow released — ${escrowInfo.amount} HBAR → ${verdict.winnerId} (task ${verdict.taskId}) — txn: ${txnId}`,
     );
 
-    this.transition(JudgeState.COMPLETED);
+    this.transitionTask(taskId, JudgeState.COMPLETED);
   }
 
   // ── Shutdown ──
@@ -279,7 +301,7 @@ export class JudgeAgent {
 // ──────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { createHederaClient, loadTopicIds, loadJudgeConfig } = await import(
+  const { createHederaClient, loadTopicIds, loadJudgeConfig, loadEscrowConfig } = await import(
     "../config/hedera.js"
   );
   const { HCSService } = await import("../services/hcs.js");
@@ -290,6 +312,7 @@ async function main(): Promise<void> {
   const client = createHederaClient();
   const topicIds = loadTopicIds();
   const judgeConfig = loadJudgeConfig();
+  const escrowConfig = loadEscrowConfig();
   const resultsWaitMs = process.env.RESULTS_WAIT_MS
     ? parseInt(process.env.RESULTS_WAIT_MS, 10)
     : 30_000;
@@ -297,7 +320,8 @@ async function main(): Promise<void> {
   const hcsService = new HCSService(client);
   const escrowService = new RealEscrowService(
     client,
-    PrivateKey.fromStringDer(judgeConfig.payerPrivateKey),
+    escrowConfig.escrowAccountId,
+    PrivateKey.fromStringDer(escrowConfig.escrowPrivateKey),
   );
   const llmService = new RealLLMService(judgeConfig.anthropicApiKey);
 
@@ -321,8 +345,9 @@ async function main(): Promise<void> {
 }
 
 // Run if executed directly
+import { fileURLToPath } from "url";
 const isDirectRun =
-  process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/"));
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isDirectRun) {
   main().catch((err) => {
