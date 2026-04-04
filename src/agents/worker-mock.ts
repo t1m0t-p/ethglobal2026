@@ -29,7 +29,7 @@ const WORKER_ID = "0.0.MOCK_WORKER_1";
 
 async function runMockTest(): Promise<void> {
   console.log("═══════════════════════════════════════════");
-  console.log("  AgentBazaar — Worker Mock Test");
+  console.log("  Hivera — Worker Mock Test");
   console.log("═══════════════════════════════════════════\n");
 
   // Step 1: Start x402 mock server

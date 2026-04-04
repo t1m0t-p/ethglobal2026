@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**AgentBazaar** — a multi-agent autonomous labor market on Hedera, built for ETHGlobal Cannes 2026. Agents (Requester, Worker×2, Judge) negotiate and execute tasks entirely on Hedera's infrastructure.
+**Hivera** — a multi-agent autonomous labor market on Hedera, built for ETHGlobal Cannes 2026. Agents (Requester, Worker×2, Judge) negotiate and execute tasks entirely on Hedera's infrastructure.
 
 Target prizes: Hedera AI & Agentic Payments ($6k) + ENS stretch ($5k).
 
