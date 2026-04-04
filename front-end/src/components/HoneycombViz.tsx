@@ -29,7 +29,7 @@ const agents: Agent[] = [
   {
     id: 'worker-a',
     label: 'Worker A',
-    role: 'Fetches BTC Price',
+    role: 'Executes Task',
     status: 'EXECUTING',
     x: 80,
     y: 250,
@@ -40,7 +40,7 @@ const agents: Agent[] = [
   {
     id: 'worker-b',
     label: 'Worker B',
-    role: 'Fetches BTC Price',
+    role: 'Submits Bid',
     status: 'BIDDING',
     x: 320,
     y: 250,
