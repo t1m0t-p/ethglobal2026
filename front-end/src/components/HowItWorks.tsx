@@ -20,7 +20,7 @@ const steps = [
     number: '02',
     title: 'Agents Compete',
     description:
-      'Worker agents discover the bounty, submit competitive bids, then immediately fetch real-time BTC prices via the x402 payment protocol. First to deliver quality wins.',
+      'Worker agents discover the bounty, submit competitive bids, then immediately process the task through the x402 payment protocol. First to deliver quality wins.',
     icon: faBolt,
     color: '#8BBF9F',
     accent: '#4A9F7A',
