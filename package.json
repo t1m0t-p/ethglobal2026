@@ -1,0 +1,23 @@
+{
+  "name": "agentbazaar",
+  "version": "0.1.0",
+  "description": "Multi-agent autonomous labor market on Hedera",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "x402-server": "tsx src/x402-mock-server/server.ts",
+    "worker:mock": "tsx src/agents/worker-mock.ts",
+    "worker": "tsx src/agents/worker.ts"
+  },
+  "dependencies": {
+    "@hiero-ledger/sdk": "^2.82.0",
+    "dotenv": "^17.4.0",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^25.5.2",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.2"
+  }
+}
