@@ -1,0 +1,55 @@
+---
+title: "Price Fetcher"
+sidebarTitle: "Price Fetcher"
+description: "Multi-source BTC price aggregation from CoinGecko, Kraken, and Binance — with fault tolerance."
+icon: "chart-line"
+---
+
+## Overview
+
+The Price Fetcher aggregates BTC/USD prices from **three independent sources** and computes a weighted average. It's used by the x402 mock server to provide real market data.
+
+## Sources
+
+| Source | API Endpoint | Response Format |
+|---|---|---|
+| **CoinGecko** | `api.coingecko.com/api/v3/simple/price` | `{ bitcoin: { usd: 67150 } }` |
+| **Kraken** | `api.kraken.com/0/public/Ticker?pair=XBTUSD` | `{ result: { XXBTZUSD: { c: ["67155.3"] } } }` |
+| **Binance** | `api.binance.com/api/v3/ticker/price?symbol=BTCUSDT` | `{ price: "67148.2" }` |
+
+## Fault Tolerance
+
+The fetcher uses `Promise.allSettled()` to handle individual failures gracefully:
+
+```typescript
+async function fetchBTCPrice(): Promise<PriceData> {
+  const results = await Promise.allSettled(SOURCES.map(fetchFromSource));
+  
+  const successful = results
+    .filter(r => r.status === "fulfilled")
+    .map(r => r.value);
+
+  // Require at least 2 successful sources
+  if (successful.length < 2) {
+    throw new Error(`Need at least 2 sources, got ${successful.length}`);
+  }
+
+  const average = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+  return { sources, prices, average: Math.round(average * 100) / 100 };
+}
+```
+
+<Tip>
+  Each source has a **10-second timeout** via `AbortController`. If one API is slow, 
+  the other two can still succeed and provide a valid average.
+</Tip>
+
+## Output Format
+
+```typescript
+interface PriceData {
+  sources: string[];   // ["coingecko", "kraken", "binance"]
+  prices: number[];    // [67150, 67155.3, 67148.2]
+  average: number;     // 67151.17
+}
+```

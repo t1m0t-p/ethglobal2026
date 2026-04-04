@@ -1,0 +1,121 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Hivera Documentation",
+  "colors": {
+    "primary": "#F7931A",
+    "light": "#FFAA33",
+    "dark": "#D4750E"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "architecture"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "agents/overview",
+              "agents/requester",
+              "agents/worker",
+              "agents/judge"
+            ]
+          },
+          {
+            "group": "Services",
+            "pages": [
+              "services/hcs",
+              "services/escrow",
+              "services/x402",
+              "services/llm",
+              "services/price-fetcher"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/environment-setup",
+              "guides/running-the-demo",
+              "guides/testing",
+              "guides/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api-reference/overview",
+              "api-reference/hcs-messages",
+              "api-reference/x402-protocol",
+              "api-reference/type-reference"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Technical Deep Dives",
+        "groups": [
+          {
+            "group": "Technical Deep Dives",
+            "pages": [
+              "deep-dives/payment-flow",
+              "deep-dives/state-machines",
+              "deep-dives/security-model",
+              "deep-dives/hedera-integration"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub Repository",
+          "href": "https://github.com/t1m0t-p/ethglobal2026",
+          "icon": "github"
+        },
+        {
+          "anchor": "Hedera Explorer",
+          "href": "https://hashscan.io/",
+          "icon": "magnifying-glass"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/t1m0t-p/ethglobal2026"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Run Demo",
+      "href": "https://github.com/t1m0t-p/ethglobal2026#-quick-start-in-60-seconds"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/t1m0t-p/ethglobal2026",
+      "linkedin": "https://www.linkedin.com/company/pocinnovation/mycompany/"
+    }
+  }
+}

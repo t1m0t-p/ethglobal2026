@@ -1,0 +1,93 @@
+---
+title: "x402 Protocol Implementation"
+sidebarTitle: "x402 Protocol"
+description: "Detailed protocol specification for Hivera's machine-to-machine payment protocol."
+icon: "money-bill-wave"
+---
+
+## Overview
+
+The x402 protocol is a set of HTTP headers that allow a server to negotiate payment with a client.
+
+## Request 1: Initial (Unauthorized)
+
+The client (Worker) attempts to access a protected resource.
+
+```http
+GET /api/v1/btc-price HTTP/1.1
+Host: api.provider.com
+```
+
+## Response 1: Payment Required
+
+The server (Data Provider) responds with a **402 Payment Required** status.
+
+```http
+HTTP/1.1 402 Payment Required
+X-Payment-Required: eyJ4NDAyVmVyc2lvbiI6Miw... (base64)
+```
+
+### X-Payment-Required Header
+
+Decodes to an `X402PaymentRequirements` object:
+
+```json
+{
+  "x402Version": 2,
+  "accepts": [
+    {
+      "scheme": "exact",
+      "network": "hedera:testnet",
+      "asset": "HBAR",
+      "amount": "1000000",
+      "payTo": "0.0.123456"
+    }
+  ]
+}
+```
+
+## Request 2: With Payment Proof
+
+The client (Worker) retries the request after signing the payment.
+
+```http
+GET /api/v1/btc-price HTTP/1.1
+Host: api.provider.com
+X-Payment: eyJ4NDAyVmVyc2lvbiI6Miwic2NoZW1lI... (base64)
+```
+
+### X-Payment Header
+
+Decodes to an `X402PaymentPayload` object:
+
+```json
+{
+  "x402Version": 2,
+  "scheme": "exact",
+  "payload": {
+    "signature": "304402203799696f8c7...",
+    "transactionId": "0.0.51234@1234567890.000000000"
+  }
+}
+```
+
+## Response 2: Success
+
+The server verifies the signature and returns the protected data.
+
+```http
+HTTP/1.1 200 OK
+X-Payment-Response: eyJzdWNjZXNzIjp0cnVlLCJ... (base64)
+Content-Type: application/json
+
+{
+  "sources": ["kraken", "binance"],
+  "prices": [45010.5, 45012.3],
+  "average": 45011.4
+}
+```
+| Header | Used by | Purpose |
+|---|---|---|
+| `X-Payment-Required` | Server | Specifies what payment is required (amount, asset, recipient) |
+| `X-Payment` | Client | Provides proof of payment (signature, transactionId) |
+| `X-Payment-Response` | Server | Confirms payment was accepted and provides transaction record |

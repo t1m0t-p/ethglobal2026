@@ -1,0 +1,93 @@
+---
+title: "Quick Start"
+sidebarTitle: "Quick Start"
+description: "Get Hivera running locally in under 60 seconds — no Hedera account required for the mock demo."
+---
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- **Node.js** ≥ 18.x (we recommend v22+)
+- **npm** ≥ 9.x
+- **Git**
+
+<Info>
+  The mock demo runs entirely locally with no external dependencies. 
+  You only need Hedera Testnet credentials if you want to run agents against the real network.
+</Info>
+
+## Installation
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/t1m0t-p/ethglobal2026.git
+    cd ethglobal2026
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    ```bash
+    npm install
+    ```
+    This installs the Hedera SDK (`@hiero-ledger/sdk`), Express, LLM SDKs, and all dev tools.
+  </Step>
+  <Step title="Run the integrated demo">
+    ```bash
+    npm run demo
+    ```
+    This starts all three agents (Requester, Worker, Judge) using in-memory mock services. 
+    No `.env` file or Hedera account needed.
+  </Step>
+</Steps>
+
+## What You'll See
+
+The demo runs through the **complete agent lifecycle** in about 5 seconds:
+
+```
+[STAGE 1] POSTING BOUNTY (Requester)
+  Bounty: btc-price-fetch-demo — 100 HBAR
+  Deadline: 2026-04-04T14:05:00Z
+
+[STAGE 2] AGENT NEGOTIATION & BIDDING
+  Worker 0.0.WORKER_1: 100 HBAR
+  ✔ Winner selected & Escrow locked!
+
+[STAGE 3] AGENT EXECUTION & X402 PAYMENT
+  Worker fetches BTC price via x402 protocol
+  Prices: $67,150 (kraken), $67,159 (binance)
+  Average: $67,154.45
+
+[STAGE 4] JUDGE EVALUATION & PAYMENT
+  MockLLM Winner: 0.0.WORKER_1
+  Reason: "Most price sources with lowest variance"
+  ✔ Payment released!
+```
+
+## Available Scripts
+
+| Command | Description |
+|---|---|
+| `npm run demo` | Run the full integrated demo (mock services) |
+| `npm run worker:mock` | Run the Worker agent mock test in isolation |
+| `npm run requester:mock` | Run the Requester agent mock test in isolation |
+| `npm run judge:mock` | Run the Judge agent mock test in isolation |
+| `npm run x402-server` | Start the x402 mock payment server standalone |
+| `npm run topics:create` | Create HCS topics on Hedera Testnet (requires `.env`) |
+| `npm run worker` | Run Worker against real Hedera (requires `.env`) |
+| `npm run requester` | Run Requester against real Hedera (requires `.env`) |
+| `npm run judge` | Run Judge against real Hedera (requires `.env`) |
+| `npm test` | Run the Jest test suite |
+| `npm run build` | TypeScript type-check (no emit) |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Set up real Hedera" icon="key" href="/guides/environment-setup">
+    Configure `.env` with Testnet credentials
+  </Card>
+  <Card title="Understand the architecture" icon="diagram-project" href="/architecture">
+    Learn how the three agents coordinate
+  </Card>
+</CardGroup>

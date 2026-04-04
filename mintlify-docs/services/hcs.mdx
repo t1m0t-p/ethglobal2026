@@ -1,0 +1,114 @@
+---
+title: "HCS Service"
+sidebarTitle: "HCS (Consensus)"
+description: "The Hedera Consensus Service layer — topic subscription, message publishing, and the mock implementation for testing."
+icon: "tower-broadcast"
+---
+
+## Overview
+
+The HCS Service is the **communication backbone** of Hivera. All inter-agent communication flows through 4 HCS topics. The service provides:
+
+- **Publishing** — Submit JSON messages to HCS topics
+- **Subscribing** — Listen for new messages on HCS topics with type-safe handlers
+- **Disconnection** — Clean teardown of all subscriptions
+
+## Interface
+
+Both real and mock implementations satisfy the `IHCSService` interface:
+
+```typescript
+type HCSMessageHandler = (message: HCSMessage, timestamp: string) => void;
+
+interface IHCSService {
+  subscribe(topicId: string, onMessage: HCSMessageHandler): Promise<void>;
+  publish(topicId: string, message: HCSMessage): Promise<void>;
+  disconnect(): void;
+}
+```
+
+## Real Implementation (`HCSService`)
+
+Uses the Hedera SDK to interact with the real Hedera Consensus Service:
+
+### Publishing
+
+```typescript
+async publish(topicId: string, message: HCSMessage): Promise<void> {
+  const payload = JSON.stringify(message);
+
+  const response = await new TopicMessageSubmitTransaction()
+    .setTopicId(topicId)
+    .setMessage(payload)
+    .execute(this.client);
+
+  const receipt = await response.getReceipt(this.client);
+  // Status: SUCCESS
+}
+```
+
+### Subscribing
+
+```typescript
+async subscribe(topicId: string, onMessage: HCSMessageHandler): Promise<void> {
+  const handle = new TopicMessageQuery()
+    .setTopicId(topicId)
+    .subscribe(this.client, null, (topicMessage) => {
+      const raw = Buffer.from(topicMessage.contents).toString("utf-8");
+      const parsed = JSON.parse(raw) as HCSMessage;
+      
+      if (!parsed.type) return; // Skip invalid messages
+      
+      onMessage(parsed, topicMessage.consensusTimestamp.toString());
+    });
+
+  this.subscriptionHandles.push(handle);
+}
+```
+
+<Info>
+  Messages are validated before dispatching — non-JSON payloads and messages without 
+  a `type` field are silently skipped.
+</Info>
+
+## Mock Implementation (`MockHCSService`)
+
+An in-memory implementation for local development and testing:
+
+```typescript
+class MockHCSService implements IHCSService {
+  private handlers: Map<string, HCSMessageHandler[]>;
+  private published: { topicId: string; message: HCSMessage }[];
+
+  async publish(topicId: string, message: HCSMessage): Promise<void> {
+    this.published.push({ topicId, message });
+    
+    // Deliver to subscribers of this topic immediately
+    const handlers = this.handlers.get(topicId) ?? [];
+    for (const handler of handlers) {
+      handler(message, new Date().toISOString());
+    }
+  }
+
+  // Inject messages for testing
+  simulateMessage(topicId: string, message: HCSMessage): void {
+    const handlers = this.handlers.get(topicId) ?? [];
+    for (const handler of handlers) {
+      handler(message, new Date().toISOString());
+    }
+  }
+
+  // Assertions
+  getPublished(): ReadonlyArray<{ topicId: string; message: HCSMessage }>;
+}
+```
+
+### Key Differences from Real HCS
+
+| Feature | Real HCS | Mock HCS |
+|---|---|---|
+| Latency | 3-7 seconds | Instant (synchronous) |
+| Persistence | Immutable on-chain | In-memory (lost on restart) |
+| Ordering | Consensus-guaranteed | Insertion order |
+| Cost | ~$0.0001 per message | Free |
+| Authentication | Requires Hedera operator | No credentials needed |
