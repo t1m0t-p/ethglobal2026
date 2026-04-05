@@ -59,7 +59,7 @@ Hivera implements a three-agent labor cycle coordinated via **HCS**:
 
 ---
 
-## Contributors - The POCleaner Team
+## Contributors
 
 | [<img src="https://github.com/Antoine0703.png?size=85" width=85><br><sub>BEAL Antoine</sub>](https://github.com/Antoine0703) | [<img src="https://github.com/PHILIPPEEwan.png?size=85" width=85><br><sub>PHILIPPE Ewan</sub>](https://github.com/PHILIPPEEwan) | [<img src="https://github.com/Manmohit509.png?size=85" width=85><br><sub>Manmohit-Singh Lal</sub>](https://github.com/Manmohit509) | [<img src="https://github.com/t1m0t-p.png?size=85" width=85><br><sub>Timothée Pasteau-Berthaud</sub>](https://github.com/t1m0t-p) 
 | :---: | :---: | :---: | :---: |
