@@ -55,7 +55,7 @@ Hivera implements a three-agent labor cycle coordinated via **HCS**:
 
 ## Prize Targets
 - **Hedera AI & Agentic Payments**: $6,000 (HCS, HTS, Escrow)
-- **Tokenization on Hedera**: $2,500 (Agent Identities)
+- **Tokenization on Hedera**: $2,500
 
 ---
 
