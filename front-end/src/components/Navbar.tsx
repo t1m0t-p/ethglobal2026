@@ -33,20 +33,29 @@ export default function Navbar() {
 
         {/* Links */}
         <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-charcoal/70">
-          <a href="#how-it-works" className="hover:text-mint-dark transition-colors">How it works</a>
-          <a href="#why" className="hover:text-mint-dark transition-colors">Why Hedera</a>
-          <a href="#live" className="hover:text-mint-dark transition-colors">Live feed</a>
+          <a href="/#how-it-works" className="hover:text-mint-dark transition-colors">How it works</a>
+          <a href="/#why" className="hover:text-mint-dark transition-colors">Why Hedera</a>
+          <a href="/#live" className="hover:text-mint-dark transition-colors">Live feed</a>
+          <a href="/demo" className="text-mint-deeper hover:text-mint-dark transition-colors">Try Demo</a>
         </div>
 
-        {/* CTA */}
-        <a
-          href="https://github.com/t1m0t-p/ethglobal2026"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-charcoal text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-mint-deeper transition-colors"
-        >
-          View on GitHub
-        </a>
+        {/* CTAs */}
+        <div className="flex items-center gap-3">
+          <a
+            href="/demo"
+            className="hidden md:block bg-mint text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-mint-deeper transition-colors"
+          >
+            Try it live →
+          </a>
+          <a
+            href="https://github.com/t1m0t-p/ethglobal2026"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-charcoal text-white text-sm font-bold px-5 py-2.5 rounded-full hover:bg-mint-deeper transition-colors"
+          >
+            View on GitHub
+          </a>
+        </div>
       </div>
     </nav>
   )

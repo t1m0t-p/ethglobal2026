@@ -49,7 +49,16 @@ export interface VerdictMessage {
   paymentAmount: number;
 }
 
-export type HCSMessage = BountyMessage | BidMessage | ResultMessage | VerdictMessage;
+// Published by the Requester after locking escrow so the Judge (running in a
+// separate process) can discover the escrow info without manual wiring.
+export interface EscrowMessage {
+  type: "escrow";
+  taskId: string;
+  escrowAccountId: string;
+  amount: number;
+}
+
+export type HCSMessage = BountyMessage | BidMessage | ResultMessage | VerdictMessage | EscrowMessage;
 
 // ──────────────────────────────────────────────
 // Price Data

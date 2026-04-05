@@ -52,7 +52,7 @@ if [ "$MODE" = "mock" ]; then
   LABEL="MOCK MODE"
 else
   X402_CMD="npm run x402-server"
-  REQUESTER_CMD="npm run requester"
+  REQUESTER_CMD="npm run requester:interactive"
   WORKER_CMD="npm run worker"
   JUDGE_CMD="npm run judge"
   LABEL="TESTNET MODE"
@@ -96,8 +96,8 @@ tmux select-pane -t "$SESSION:0.1" -T "judge"
 tmux send-keys -t "$SESSION:0.1" "$(run_cmd 'Judge' 2 "$JUDGE_CMD")" Enter
 
 # Pane 3 — Requester (bottom-right), starts after worker+judge are up
-tmux select-pane -t "$SESSION:0.3" -T "requester"
-tmux send-keys -t "$SESSION:0.3" "$(run_cmd 'Requester' 4 "$REQUESTER_CMD")" Enter
+tmux select-pane -t "$SESSION:0.3" -T "requester (interactive · :3100)"
+tmux send-keys -t "$SESSION:0.3" "$(run_cmd 'Requester (interactive)' 4 "$REQUESTER_CMD")" Enter
 
 # ── Status bar ──
 tmux set-option -t "$SESSION" status-left "#[fg=black,bg=cyan,bold] HIVERA — $LABEL "

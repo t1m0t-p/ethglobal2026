@@ -81,10 +81,10 @@ export default function Hero() {
             className="flex flex-wrap gap-3 pt-2"
           >
             <a
-              href="#how-it-works"
+              href="/demo"
               className="bg-charcoal text-white font-bold px-7 py-3.5 rounded-full text-sm hover:bg-mint-deeper transition-all hover:scale-105 active:scale-95"
             >
-              Watch it run →
+              Try it live →
             </a>
             <a
               href="https://github.com/t1m0t-p/ethglobal2026"
