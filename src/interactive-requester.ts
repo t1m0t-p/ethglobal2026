@@ -22,6 +22,9 @@ interface TaskRecord {
   params: BountyRequest;
   state: string;
   createdAt: string;
+  verdict?: any;
+  evidence?: any;
+  results?: any[];
 }
 
 export class InteractiveRequester {
@@ -112,6 +115,9 @@ export class InteractiveRequester {
       }
       // Update state from requester agent
       record.state = this.requester.getState();
+      record.verdict = this.requester.getLastVerdict();
+      record.evidence = this.requester.getLastEvidence();
+      record.results = this.requester.getResults();
       res.json(record);
     });
 

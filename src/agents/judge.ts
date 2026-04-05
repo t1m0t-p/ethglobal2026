@@ -301,6 +301,13 @@ export class JudgeAgent {
       `[judge:${this.accountId}] HBAR escrow released — ${escrowInfo.amount} HBAR → ${verdict.winnerId} (task ${verdict.taskId}) — txn: ${txnId}`,
     );
 
+    // 3. Publish evidence message for the UI to show Hashscan link
+    await this.hcs.publish(this.topicIds.verdicts, {
+      type: "evidence",
+      taskId: verdict.taskId,
+      transactionId: txnId,
+    });
+
     this.transitionTask(taskId, JudgeState.COMPLETED);
   }
 

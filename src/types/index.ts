@@ -58,7 +58,19 @@ export interface EscrowMessage {
   amount: number;
 }
 
-export type HCSMessage = BountyMessage | BidMessage | ResultMessage | VerdictMessage | EscrowMessage;
+export interface EvidenceMessage {
+  type: "evidence";
+  taskId: string;
+  transactionId: string;
+}
+
+export type HCSMessage =
+  | BountyMessage
+  | BidMessage
+  | ResultMessage
+  | VerdictMessage
+  | EscrowMessage
+  | EvidenceMessage;
 
 // ──────────────────────────────────────────────
 // Price Data

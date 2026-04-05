@@ -3,8 +3,10 @@ import type {
   TopicIds,
   BountyMessage,
   BidMessage,
+  ResultMessage,
   VerdictMessage,
   EscrowMessage,
+  EvidenceMessage,
   HCSMessage,
 } from "../types/index.js";
 import { RequesterState } from "../types/index.js";
@@ -37,6 +39,9 @@ export class RequesterAgent {
 
   private currentBounty: BountyMessage | null = null;
   private acceptedBids: BidMessage[] = [];
+  private results: ResultMessage[] = [];
+  private lastVerdict: VerdictMessage | null = null;
+  private lastEvidence: EvidenceMessage | null = null;
   private escrowInfo: EscrowInfo | null = null;
   private errorReason: string | null = null;
   private isEscrowing = false; // guard against double-call from concurrent bid handlers
@@ -67,6 +72,18 @@ export class RequesterAgent {
     return this.escrowInfo;
   }
 
+  getLastVerdict(): VerdictMessage | null {
+    return this.lastVerdict;
+  }
+
+  getLastEvidence(): EvidenceMessage | null {
+    return this.lastEvidence;
+  }
+
+  getResults(): ResultMessage[] {
+    return [...this.results];
+  }
+
   // ── State transitions ──
 
   private transition(to: RequesterState): void {
@@ -83,6 +100,9 @@ export class RequesterAgent {
   reset(): void {
     this.currentBounty = null;
     this.acceptedBids = [];
+    this.results = [];
+    this.lastVerdict = null;
+    this.lastEvidence = null;
     this.escrowInfo = null;
     this.errorReason = null;
     this.isEscrowing = false;
@@ -110,6 +130,14 @@ export class RequesterAgent {
     await this.hcs.subscribe(this.topicIds.verdicts, (message: HCSMessage) => {
       if (message.type === "verdict") {
         this.handleVerdict(message);
+      } else if (message.type === "evidence") {
+        this.handleEvidence(message);
+      }
+    });
+
+    await this.hcs.subscribe(this.topicIds.results, (message: HCSMessage) => {
+      if (message.type === "result") {
+        this.handleResult(message);
       }
     });
 
@@ -209,17 +237,34 @@ export class RequesterAgent {
     );
   }
 
-  // ── Verdict handling (informational) ──
+  // ── Verdict & Evidence handling (informational) ──
+
+  private handleResult(result: ResultMessage): void {
+    if (!this.currentBounty || result.taskId !== this.currentBounty.taskId) {
+      return;
+    }
+    this.results.push(result);
+    console.log(`[requester:${this.accountId}] Result received from ${result.workerId} for ${result.taskId}`);
+  }
 
   private handleVerdict(verdict: VerdictMessage): void {
     if (!this.currentBounty || verdict.taskId !== this.currentBounty.taskId) {
       return;
     }
 
+    this.lastVerdict = verdict;
     console.log(
       `[requester:${this.accountId}] Verdict received — winner: ${verdict.winnerId}, payment: ${verdict.paymentAmount} HBAR — "${verdict.reason}"`,
     );
     this.transition(RequesterState.COMPLETED);
+  }
+
+  private handleEvidence(evidence: EvidenceMessage): void {
+    if (!this.currentBounty || evidence.taskId !== this.currentBounty.taskId) {
+      return;
+    }
+    this.lastEvidence = evidence;
+    console.log(`[requester:${this.accountId}] Evidence (payment txn) received: ${evidence.transactionId}`);
   }
 
   // ── Convenience: submit a new bounty (resets state if needed) ──

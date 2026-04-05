@@ -60,8 +60,8 @@ const STEPS: TimelineStep[] = [
     description: 'Judge evaluates submissions, posts verdict on HCS, and releases HBAR on-chain.',
     techDetail: 'VerdictMessage · ScheduleSignTransaction',
     icon: '⚖️',
-    activeStates: ['COMPLETED'],
-    completeWhen: [],
+    activeStates: [], // No longer active on COMPLETED
+    completeWhen: ['COMPLETED'], // Now completes on COMPLETED
   },
 ]
 
@@ -149,6 +149,7 @@ interface Props {
 
 export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
   const [currentState, setCurrentState] = useState<string>('IDLE')
+  const [taskData, setTaskData] = useState<any>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const demoRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -172,6 +173,7 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
         if (!res.ok) return
         const data = await res.json()
         setCurrentState(data.state ?? 'IDLE')
+        setTaskData(data)
         if (data.state === 'COMPLETED' || data.state === 'ERROR') {
           if (pollRef.current) clearInterval(pollRef.current)
         }
@@ -207,6 +209,22 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
   }, [demoMode])
 
   const isComplete = currentState === 'COMPLETED'
+
+  // Helper to format Hashscan link
+  const getHashscanLink = (txId: string) => {
+    if (!txId) return '#'
+    // Hedera txn IDs can be in various formats; Hashscan usually handles 0.0.xxxx@1234.5678
+    return `https://hashscan.io/testnet/transaction/${txId}`
+  }
+
+  // Helper to find the winner's result output
+  const getWinnerOutput = () => {
+    if (!taskData?.verdict || !taskData?.results) return null
+    const winnerId = taskData.verdict.winnerId
+    const winnerResult = taskData.results.find((r: any) => r.workerId === winnerId)
+    if (!winnerResult?.data) return null
+    return `$${winnerResult.data.average.toLocaleString()} (via ${winnerResult.data.sources.length} sources)`
+  }
 
   return (
     <div className="flex flex-col gap-0">
@@ -289,13 +307,34 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
                 </p>
 
                 {status !== 'pending' && (
-                  <motion.p
+                  <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
-                    className="text-xs font-mono text-mint-deeper/70 mt-1"
+                    className="text-xs font-mono text-mint-deeper/70 mt-1 space-y-1"
                   >
-                    {step.techDetail}
-                  </motion.p>
+                    <p>{step.techDetail}</p>
+                    {/* Winner Details Enhancement */}
+                    {step.id === 'verdict' && status === 'complete' && taskData?.verdict && (
+                      <div className="bg-mint-light/30 border border-mint/10 rounded-lg p-2 mt-2 not-italic font-sans">
+                        <p className="text-charcoal font-bold text-[10px] uppercase tracking-wider mb-1">
+                          Winning Outcome
+                        </p>
+                        <p className="text-charcoal text-[13px] font-medium mb-2">
+                          {getWinnerOutput() || 'Processing results...'}
+                        </p>
+                        {taskData.evidence?.transactionId && (
+                          <a
+                            href={getHashscanLink(taskData.evidence.transactionId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold text-mint-dark hover:text-mint-deeper underline decoration-mint/30"
+                          >
+                            🔗 View on Hashscan
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
                 )}
               </div>
             </motion.div>
