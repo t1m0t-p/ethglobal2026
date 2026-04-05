@@ -148,8 +148,20 @@ interface Props {
   apiBase: string
 }
 
+// State ordering for "furthest reached" tracking — ERROR is excluded intentionally
+const STATE_ORDER = ['IDLE', 'submitted', 'awaiting_bids', 'POSTING', 'AWAITING_BIDS', 'ESCROWING', 'AWAITING_RESULTS', 'COMPLETED']
+
+function furtherState(a: string, b: string): string {
+  const ia = STATE_ORDER.indexOf(a)
+  const ib = STATE_ORDER.indexOf(b)
+  return ib > ia ? b : a
+}
+
 export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
   const [currentState, setCurrentState] = useState<string>('IDLE')
+  const [displayState, setDisplayState] = useState<string>('IDLE') // furthest non-ERROR state
+  const [hasError, setHasError] = useState(false)
+  const [errorReason, setErrorReason] = useState<string | null>(null)
   const [taskData, setTaskData] = useState<any>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -174,10 +186,18 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
         const res = await fetch(`${apiBase}/api/status/${taskId}`)
         if (!res.ok) return
         const data = await res.json()
-        setCurrentState(data.state ?? 'IDLE')
+        const state: string = data.state ?? 'IDLE'
+        setCurrentState(state)
         setTaskData(data)
-        if (data.state === 'COMPLETED' || data.state === 'ERROR') {
-          if (pollRef.current) clearInterval(pollRef.current)
+        if (state === 'ERROR') {
+          setHasError(true)
+          setErrorReason(data.errorReason ?? null)
+          // Don't stop polling — agent may transition ERROR → COMPLETED when verdict arrives
+        } else {
+          setDisplayState((prev) => furtherState(prev, state))
+          if (state === 'COMPLETED') {
+            if (pollRef.current) clearInterval(pollRef.current)
+          }
         }
       } catch {
         // silently ignore poll errors
@@ -210,6 +230,8 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
     }
   }, [demoMode])
 
+  // Use furthest-reached state for rendering so steps don't regress on transient ERROR
+  const renderState = currentState === 'COMPLETED' ? 'COMPLETED' : displayState
   const isComplete = currentState === 'COMPLETED'
 
   // Helper to format Hashscan link
@@ -250,9 +272,29 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
         )}
       </div>
 
+      {/* Error banner — non-blocking, agent may recover to COMPLETED */}
+      <AnimatePresence>
+        {hasError && !isComplete && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="mb-4 bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-3"
+          >
+            <span className="text-red-400 text-lg flex-shrink-0">⚠</span>
+            <div>
+              <p className="text-red-700 font-bold text-xs">Escrow error</p>
+              <p className="text-red-500 text-xs mt-0.5">
+                {errorReason ?? 'An error occurred — verdict may still complete without on-chain payment.'}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Steps */}
       {STEPS.map((step, i) => {
-        const status = getStepStatus(step, currentState)
+        const status = getStepStatus(step, renderState)
         const isLast = i === STEPS.length - 1
 
         return (

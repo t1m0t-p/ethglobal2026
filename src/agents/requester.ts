@@ -3,7 +3,6 @@ import type {
   TopicIds,
   BountyMessage,
   BidMessage,
-  BidAcceptMessage,
   ResultMessage,
   VerdictMessage,
   EscrowMessage,
@@ -249,20 +248,12 @@ export class RequesterAgent {
   private async lockEscrow(): Promise<void> {
     if (!this.currentBounty) return;
 
-    // Publish bid-accept messages for each selected worker BEFORE locking escrow.
-    // Workers are blocked in AWAITING_ACCEPTANCE and will only execute once they
-    // see their own workerId in a bid-accept message. This is the real negotiation
-    // handshake — without it, every worker that bids would execute unconditionally.
+    // Per the Hivera design, workers bid-and-execute without waiting for an
+    // acceptance handshake. We log the selected workers for observability and
+    // proceed straight to escrow.
     for (const bid of this.acceptedBids) {
-      const accept: BidAcceptMessage = {
-        type: "bid-accept",
-        taskId: this.currentBounty.taskId,
-        workerId: bid.workerId,
-        acceptedAmount: bid.bidAmount,
-      };
-      await this.hcs.publish(this.topicIds.bids, accept);
       console.log(
-        `[requester:${this.accountId}] Accepted bid published → ${bid.workerId} @ ${bid.bidAmount} HBAR (task ${this.currentBounty.taskId})`,
+        `[requester:${this.accountId}] Selected worker ${bid.workerId} @ ${bid.bidAmount} HBAR (task ${this.currentBounty.taskId})`,
       );
     }
 

@@ -1,4 +1,4 @@
-import type { BountyMessage, VerdictMessage, BidAcceptMessage, TopicIds } from "../types/index.js";
+import type { BountyMessage, VerdictMessage, TopicIds } from "../types/index.js";
 import { WorkerState } from "../types/index.js";
 import { MockHCSService } from "../services/hcs.js";
 import { createMockPaymentSigner } from "../services/x402-client.js";
@@ -58,21 +58,9 @@ async function runMockTest(): Promise<void> {
   console.log("\n▶ Simulating bounty arrival...");
   mockHCS.simulateMessage(MOCK_TOPIC_IDS.bounties, MOCK_BOUNTY);
 
-  // Step 5a: Wait for the worker to bid and enter AWAITING_ACCEPTANCE,
-  // then simulate the Requester's bid-accept so execution can proceed.
-  await waitForState(worker, WorkerState.AWAITING_ACCEPTANCE, 5_000);
-
-  console.log("\n▶ Simulating Requester bid-accept...");
-  const bidAccept: BidAcceptMessage = {
-    type: "bid-accept",
-    taskId: MOCK_BOUNTY.taskId,
-    workerId: WORKER_ID,
-    acceptedAmount: 50,
-  };
-  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, bidAccept);
-
-  // Wait for async processing to complete
-  await waitForState(worker, WorkerState.COMPLETED, 15_000);
+  // Worker bids and executes in one shot (no acceptance handshake). Wait
+  // until a result has been published to HCS.
+  await waitForPublished(mockHCS, "result", 15_000);
 
   // Step 6: Verify published messages
   console.log("\n▶ Verifying published messages...");
@@ -132,24 +120,19 @@ function assert(condition: boolean, message: string): void {
   console.log(`  ✓ ${message}`);
 }
 
-async function waitForState(
-  worker: WorkerAgent,
-  target: WorkerState,
+async function waitForPublished(
+  mockHCS: MockHCSService,
+  messageType: string,
   timeoutMs: number,
 ): Promise<void> {
   const start = Date.now();
-  while (worker.getState() !== target) {
-    if (worker.getState() === WorkerState.ERROR) {
-      throw new Error(`Worker entered ERROR state: ${worker.getErrorReason()}`);
-    }
+  while (!mockHCS.getPublished().some((m) => m.message.type === messageType)) {
     if (Date.now() - start > timeoutMs) {
-      throw new Error(
-        `Timeout waiting for state ${target} — stuck in ${worker.getState()}`,
-      );
+      throw new Error(`Timeout waiting for ${messageType} to be published`);
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  console.log(`  ✓ Worker reached state: ${target}`);
+  console.log(`  ✓ ${messageType} message published`);
 }
 
 // ── Run ──

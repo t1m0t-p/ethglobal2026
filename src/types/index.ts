@@ -35,17 +35,6 @@ export interface BidMessage {
   estimatedTime: string;
 }
 
-// Published by the Requester on the bids topic once it has picked the set of
-// workers for a task. Workers that bid only begin executing after seeing their
-// own workerId in a bid-accept message. Every selected worker gets its own
-// BidAcceptMessage; the accepted amount is the price the Requester commits to.
-export interface BidAcceptMessage {
-  type: "bid-accept";
-  taskId: string;
-  workerId: string;        // selected worker
-  acceptedAmount: number;  // HBAR the Requester commits to pay this worker if they win
-}
-
 export interface ResultMessage {
   type: "result";
   taskId: string;
@@ -88,7 +77,6 @@ export interface EvidenceMessage {
 export type HCSMessage =
   | BountyMessage
   | BidMessage
-  | BidAcceptMessage
   | ResultMessage
   | VerdictMessage
   | EscrowMessage
@@ -147,7 +135,6 @@ export enum WorkerState {
   IDLE = "IDLE",
   DISCOVERING = "DISCOVERING",
   BIDDING = "BIDDING",
-  AWAITING_ACCEPTANCE = "AWAITING_ACCEPTANCE",
   EXECUTING = "EXECUTING",
   SUBMITTING = "SUBMITTING",
   COMPLETED = "COMPLETED",

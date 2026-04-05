@@ -119,6 +119,9 @@ export class InteractiveRequester {
       }
       // Update state from requester agent
       record.state = this.requester.getState();
+      if (record.state === RequesterState.ERROR) {
+        (record as any).errorReason = this.requester.getErrorReason();
+      }
       record.verdict = this.requester.getLastVerdict();
       record.evidence = this.requester.getLastEvidence();
       record.evidences = this.requester.getEvidences();

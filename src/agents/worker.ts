@@ -4,7 +4,6 @@ import type {
   PaymentSigner,
   BountyMessage,
   BidMessage,
-  BidAcceptMessage,
   ResultMessage,
   VerdictMessage,
   HCSMessage,
@@ -26,10 +25,6 @@ export interface WorkerConfig {
   topicIds: TopicIds;
   bidAmount?: number;
   geminiWorker?: IGeminiWorkerService;
-  // How long (ms) to wait for a bid-accept message after bidding before giving
-  // up on a bounty. Defaults to 90_000 (90s). Workers that are not selected by
-  // the Requester will silently drop the task after this timeout.
-  acceptanceTimeoutMs?: number;
 }
 
 export class WorkerAgent {
@@ -40,18 +35,12 @@ export class WorkerAgent {
   private readonly x402Url: string;
   private readonly topicIds: TopicIds;
   private readonly bidAmount: number;
-  private readonly acceptanceTimeoutMs: number;
 
   private readonly geminiWorker: IGeminiWorkerService | null;
 
   private currentBounty: BountyMessage | null = null;
   private lastResult: PriceData | null = null;
   private errorReason: string | null = null;
-  private acceptanceTimer: ReturnType<typeof setTimeout> | null = null;
-  // Resolved when a bid-accept message for the currentBounty arrives. The
-  // processBounty() promise chain awaits this before executing the task.
-  private acceptanceResolver: ((accepted: BidAcceptMessage) => void) | null = null;
-  private acceptanceRejecter: ((reason: Error) => void) | null = null;
 
   constructor(config: WorkerConfig) {
     this.workerId = config.workerId;
@@ -60,7 +49,6 @@ export class WorkerAgent {
     this.x402Url = config.x402Url;
     this.topicIds = config.topicIds;
     this.bidAmount = config.bidAmount ?? 50;
-    this.acceptanceTimeoutMs = config.acceptanceTimeoutMs ?? 90_000;
     this.geminiWorker = config.geminiWorker ?? null;
   }
 
@@ -86,20 +74,10 @@ export class WorkerAgent {
   }
 
   reset(): void {
-    this.clearAcceptanceWait();
     this.currentBounty = null;
     this.lastResult = null;
     this.errorReason = null;
     this.transition(WorkerState.IDLE);
-  }
-
-  private clearAcceptanceWait(): void {
-    if (this.acceptanceTimer !== null) {
-      clearTimeout(this.acceptanceTimer);
-      this.acceptanceTimer = null;
-    }
-    this.acceptanceResolver = null;
-    this.acceptanceRejecter = null;
   }
 
   // ── Main entrypoint ──
@@ -111,32 +89,23 @@ export class WorkerAgent {
 
     this.transition(WorkerState.DISCOVERING);
 
-    // Subscribe to bounties starting from slightly before now.
-    // This avoids replaying old unexpired bounties from previous sessions that would
-    // cause the worker to get stuck waiting for acceptance (90s timeout) while missing
-    // the current bounty — which triggers the requester's bid timeout and causes ERROR.
-    const bountyStartTime = new Date(Date.now() - 60_000); // 60s look-back window
+    // Subscribe to bounties from NOW. We must NOT replay historical messages,
+    // otherwise stale bounties from previous sessions lock up the worker on
+    // already-expired tasks and it misses the live bounty the Requester is
+    // waiting on.
+    const startTime = new Date();
     await this.hcs.subscribe(this.topicIds.bounties, (message: HCSMessage) => {
       if (message.type === "bounty") {
         this.handleBounty(message);
       }
-    }, bountyStartTime);
+    }, startTime);
 
-    // Subscribe to bids topic so we can receive our own bid-accept from the
-    // Requester and know we are authorized to execute. Own bid echoes are
-    // ignored — we only care about bid-accept messages targeting this worker.
-    await this.hcs.subscribe(this.topicIds.bids, (message: HCSMessage) => {
-      if (message.type === "bid-accept") {
-        this.handleBidAccept(message);
-      }
-    });
-
-    // Subscribe to verdicts (informational)
+    // Subscribe to verdicts (informational) from NOW.
     await this.hcs.subscribe(this.topicIds.verdicts, (message: HCSMessage) => {
       if (message.type === "verdict") {
         this.handleVerdict(message);
       }
-    });
+    }, startTime);
 
     console.log(`[worker:${this.workerId}] Listening for bounties...`);
   }
@@ -194,67 +163,12 @@ export class WorkerAgent {
   }
 
   private async processBounty(bounty: BountyMessage): Promise<void> {
-    // Step 1: Submit bid
+    // Bid-and-execute: per the Hivera design, the Worker does NOT wait for
+    // bid acceptance before executing. All workers that bid also submit
+    // results, and the Judge picks the winner among submitted results.
     await this.submitBid(bounty);
-
-    // Step 2: Wait for the Requester to accept this specific bid.
-    // This is the negotiation handshake — workers that are not selected will
-    // time out here and drop the bounty without burning API credits on execution.
-    const accept = await this.waitForAcceptance(bounty);
-    console.log(
-      `[worker:${this.workerId}] Bid accepted for ${bounty.taskId} @ ${accept.acceptedAmount} HBAR — starting execution`,
-    );
-
-    // Step 3: Execute task (Gemini-driven or legacy x402)
     const priceData = await this.executeTask(bounty);
-
-    // Step 4: Submit result
     await this.submitResult(bounty, priceData);
-  }
-
-  // ── Acceptance handshake ──
-
-  private waitForAcceptance(bounty: BountyMessage): Promise<BidAcceptMessage> {
-    this.transition(WorkerState.AWAITING_ACCEPTANCE);
-    console.log(
-      `[worker:${this.workerId}] Awaiting bid acceptance for ${bounty.taskId} (timeout ${this.acceptanceTimeoutMs}ms)`,
-    );
-
-    return new Promise<BidAcceptMessage>((resolve, reject) => {
-      this.acceptanceResolver = (msg) => {
-        this.clearAcceptanceWait();
-        resolve(msg);
-      };
-      this.acceptanceRejecter = (err) => {
-        this.clearAcceptanceWait();
-        reject(err);
-      };
-      this.acceptanceTimer = setTimeout(() => {
-        const rej = this.acceptanceRejecter;
-        this.clearAcceptanceWait();
-        if (rej) {
-          rej(
-            new Error(
-              `Bid not accepted within ${this.acceptanceTimeoutMs}ms — dropping task ${bounty.taskId}`,
-            ),
-          );
-        }
-      }, this.acceptanceTimeoutMs);
-    });
-  }
-
-  private handleBidAccept(msg: BidAcceptMessage): void {
-    // Only care about our own bid on our current task.
-    if (!this.currentBounty || msg.taskId !== this.currentBounty.taskId) return;
-    if (msg.workerId !== this.workerId) return;
-    if (this.state !== WorkerState.AWAITING_ACCEPTANCE) {
-      console.log(
-        `[worker:${this.workerId}] Ignoring bid-accept for ${msg.taskId} — state: ${this.state}`,
-      );
-      return;
-    }
-    const resolver = this.acceptanceResolver;
-    if (resolver) resolver(msg);
   }
 
   // ── Bid submission ──
@@ -338,15 +252,21 @@ export class WorkerAgent {
     console.log(
       `[worker:${this.workerId}] Result submitted for ${bounty.taskId} — awaiting verdict`,
     );
+
+    // Return to DISCOVERING so we can take the next bounty without waiting for
+    // the verdict. The verdict handler still logs win/loss for the submitted
+    // task (informationally), even though currentBounty may have moved on.
+    this.currentBounty = null;
+    this.lastResult = null;
+    this.transition(WorkerState.DISCOVERING);
+    console.log(`[worker:${this.workerId}] Ready for next bounty...`);
   }
 
   // ── Verdict handling ──
 
   private handleVerdict(verdict: VerdictMessage): void {
-    if (!this.currentBounty || verdict.taskId !== this.currentBounty.taskId) {
-      return;
-    }
-
+    // Informational only — the worker already returned to DISCOVERING after
+    // submitting its result, so this just logs the outcome.
     if (verdict.winnerId === this.workerId) {
       console.log(
         `[worker:${this.workerId}] 🏆 WON bounty ${verdict.taskId}! Payment: ${verdict.paymentAmount} HBAR — "${verdict.reason}"`,
@@ -356,13 +276,6 @@ export class WorkerAgent {
         `[worker:${this.workerId}] Lost bounty ${verdict.taskId} — winner: ${verdict.winnerId}`,
       );
     }
-
-    // Ready for next bounty
-    this.currentBounty = null;
-    this.lastResult = null;
-    this.errorReason = null;
-    this.transition(WorkerState.DISCOVERING);
-    console.log(`[worker:${this.workerId}] Listening for bounties...`);
   }
 
   // ── Shutdown ──
