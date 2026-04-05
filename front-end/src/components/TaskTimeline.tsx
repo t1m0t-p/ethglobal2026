@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import TaskDetailsModal from './TaskDetailsModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,7 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
   const [currentState, setCurrentState] = useState<string>('IDLE')
   const [taskData, setTaskData] = useState<any>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const demoRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -353,16 +355,32 @@ export default function TaskTimeline({ taskId, demoMode, apiBase }: Props) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-6 bg-mint-light border border-mint/40 rounded-2xl p-5 text-center"
+            className="mt-6 bg-mint-light border border-mint/40 rounded-2xl p-5 text-center flex flex-col items-center gap-3"
           >
-            <div className="text-3xl mb-2">🎉</div>
+            <div className="text-3xl">🎉</div>
             <p className="font-bold text-mint-deeper text-sm">Task complete!</p>
-            <p className="text-charcoal/50 text-xs mt-1">
+            <p className="text-charcoal/50 text-xs">
               HBAR released to the winning agent on-chain.
             </p>
+            <button
+              onClick={() => setDetailsOpen(true)}
+              className="mt-1 inline-flex items-center gap-2 bg-charcoal text-white text-xs font-bold px-5 py-2.5 rounded-full hover:bg-mint-deeper transition-colors"
+            >
+              View Details
+              <span aria-hidden>→</span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Details modal */}
+      <TaskDetailsModal
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        taskId={taskId}
+        taskData={taskData}
+        demoMode={demoMode}
+      />
     </div>
   )
 }

@@ -267,10 +267,17 @@ export class GeminiWorkerService implements IGeminiWorkerService {
       `- Use google_search for real-world information: flights, travel, delivery rates, news, general prices, etc.\n` +
       `- Use x402_fetch_price_data ONLY when the task explicitly asks for cryptocurrency price data (e.g. BTC/USD, ETH/USD).\n` +
       `- Do NOT default to x402_fetch_price_data for non-crypto tasks.\n\n` +
+      `SOURCING REQUIREMENT (mandatory):\n` +
+      `You MUST cite the provenance of every value you return. Each entry in "sources" must be\n` +
+      `a verifiable origin — a full URL (preferred), a recognizable company/exchange name\n` +
+      `(e.g. "Binance", "Lufthansa", "DHL"), or a well-known website domain (e.g. "coingecko.com").\n` +
+      `Never use vague placeholders like "source1", "web", "api", or "search". If a tool does\n` +
+      `not give you a source, re-query until you have one. The judge will penalize or discard\n` +
+      `results whose sources are not attributable.\n\n` +
       `When you have gathered the data, output ONLY a JSON object in this exact format and nothing else:\n` +
-      `{"sources": ["source1", "source2"], "prices": [123.45, 67.89], "average": 95.67}\n` +
+      `{"sources": ["https://www.coingecko.com/en/coins/bitcoin", "Binance"], "prices": [123.45, 67.89], "average": 95.67}\n` +
       `Where:\n` +
-      `- "sources": array of strings identifying the data sources used (exchange names, airline names, websites, etc.)\n` +
+      `- "sources": array of strings identifying the data sources used — URLs, exchange names, airline names, company names, or website domains. The length of this array should match the length of "prices".\n` +
       `- "prices": array of numbers representing the values found (ticket prices, delivery rates, asset prices, etc.)\n` +
       `- "average": the best or most representative single value as a number\n` +
       `Do not add markdown fences. Do not add any text before or after the JSON object.`;

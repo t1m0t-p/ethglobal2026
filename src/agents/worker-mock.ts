@@ -1,4 +1,4 @@
-import type { BountyMessage, VerdictMessage, TopicIds } from "../types/index.js";
+import type { BountyMessage, VerdictMessage, BidAcceptMessage, TopicIds } from "../types/index.js";
 import { WorkerState } from "../types/index.js";
 import { MockHCSService } from "../services/hcs.js";
 import { createMockPaymentSigner } from "../services/x402-client.js";
@@ -57,6 +57,19 @@ async function runMockTest(): Promise<void> {
   // Step 5: Simulate a bounty arriving via HCS
   console.log("\n▶ Simulating bounty arrival...");
   mockHCS.simulateMessage(MOCK_TOPIC_IDS.bounties, MOCK_BOUNTY);
+
+  // Step 5a: Wait for the worker to bid and enter AWAITING_ACCEPTANCE,
+  // then simulate the Requester's bid-accept so execution can proceed.
+  await waitForState(worker, WorkerState.AWAITING_ACCEPTANCE, 5_000);
+
+  console.log("\n▶ Simulating Requester bid-accept...");
+  const bidAccept: BidAcceptMessage = {
+    type: "bid-accept",
+    taskId: MOCK_BOUNTY.taskId,
+    workerId: WORKER_ID,
+    acceptedAmount: 50,
+  };
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, bidAccept);
 
   // Wait for async processing to complete
   await waitForState(worker, WorkerState.COMPLETED, 15_000);

@@ -3,6 +3,7 @@ import type {
   TopicIds,
   BountyMessage,
   BidMessage,
+  BidAcceptMessage,
   ResultMessage,
   VerdictMessage,
   EscrowMessage,
@@ -45,6 +46,7 @@ export class RequesterAgent {
   private results: ResultMessage[] = [];
   private lastVerdict: VerdictMessage | null = null;
   private lastEvidence: EvidenceMessage | null = null;
+  private evidences: EvidenceMessage[] = [];
   private escrowInfo: EscrowInfo | null = null;
   private errorReason: string | null = null;
   private isEscrowing = false; // guard against double-call from concurrent bid handlers
@@ -86,6 +88,10 @@ export class RequesterAgent {
     return this.lastEvidence;
   }
 
+  getEvidences(): EvidenceMessage[] {
+    return [...this.evidences];
+  }
+
   getResults(): ResultMessage[] {
     return [...this.results];
   }
@@ -114,6 +120,7 @@ export class RequesterAgent {
     this.results = [];
     this.lastVerdict = null;
     this.lastEvidence = null;
+    this.evidences = [];
     this.escrowInfo = null;
     this.errorReason = null;
     this.isEscrowing = false;
@@ -242,6 +249,23 @@ export class RequesterAgent {
   private async lockEscrow(): Promise<void> {
     if (!this.currentBounty) return;
 
+    // Publish bid-accept messages for each selected worker BEFORE locking escrow.
+    // Workers are blocked in AWAITING_ACCEPTANCE and will only execute once they
+    // see their own workerId in a bid-accept message. This is the real negotiation
+    // handshake — without it, every worker that bids would execute unconditionally.
+    for (const bid of this.acceptedBids) {
+      const accept: BidAcceptMessage = {
+        type: "bid-accept",
+        taskId: this.currentBounty.taskId,
+        workerId: bid.workerId,
+        acceptedAmount: bid.bidAmount,
+      };
+      await this.hcs.publish(this.topicIds.bids, accept);
+      console.log(
+        `[requester:${this.accountId}] Accepted bid published → ${bid.workerId} @ ${bid.bidAmount} HBAR (task ${this.currentBounty.taskId})`,
+      );
+    }
+
     this.transition(RequesterState.ESCROWING);
     console.log(
       `[requester:${this.accountId}] Creating escrow for ${this.currentBounty.reward} HBAR — task ${this.currentBounty.taskId}`,
@@ -305,7 +329,12 @@ export class RequesterAgent {
       return;
     }
     this.lastEvidence = evidence;
-    console.log(`[requester:${this.accountId}] Evidence (payment txn) received: ${evidence.transactionId}`);
+    this.evidences.push(evidence);
+    console.log(
+      `[requester:${this.accountId}] Evidence (${evidence.kind ?? "payment"}) received: ${evidence.transactionId}` +
+        (evidence.recipient ? ` → ${evidence.recipient}` : "") +
+        (evidence.amount !== undefined ? ` (${evidence.amount})` : ""),
+    );
   }
 
   // ── Convenience: submit a new bounty (resets state if needed) ──

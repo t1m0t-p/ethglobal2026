@@ -25,6 +25,10 @@ export interface JudgeConfig {
   escrowService: EscrowService | MockEscrowService;
   htsService?: IHTSService; // optional — if provided, transfers HIVE tokens to winner on verdict
   resultsWaitMs?: number; // how long to collect results before evaluating (default 30_000)
+  // Consolation prize paid (in HIVE tokens) to each losing worker that submitted a result.
+  // Ensures agents that burned API credits on losing bids are not left out-of-pocket.
+  // Defaults: 10% of the bounty reward, rounded up, with a floor of 1.
+  consolationPrize?: number;
 }
 
 export class JudgeAgent {
@@ -36,6 +40,7 @@ export class JudgeAgent {
   private readonly escrowService: EscrowService | MockEscrowService;
   private readonly htsService?: IHTSService;
   private readonly resultsWaitMs: number;
+  private readonly explicitConsolationPrize?: number;
 
   // Per-task collections — Judge can handle multiple bounties concurrently
   private taskStates: Map<string, JudgeState> = new Map();
@@ -56,6 +61,7 @@ export class JudgeAgent {
     this.escrowService = config.escrowService;
     this.htsService = config.htsService;
     this.resultsWaitMs = config.resultsWaitMs ?? 30_000;
+    this.explicitConsolationPrize = config.consolationPrize;
   }
 
   getState(): JudgeState {
@@ -288,10 +294,25 @@ export class JudgeAgent {
 
     // 1. HTS token transfer → actual winner (HIVE reward)
     if (this.htsService) {
-      const htsTxId = await this.htsService.transferToken(verdict.winnerId, verdict.paymentAmount);
-      console.log(
-        `[judge:${this.accountId}] HIVE token sent to winner ${verdict.winnerId} — txn: ${htsTxId}`,
-      );
+      try {
+        const htsTxId = await this.htsService.transferToken(verdict.winnerId, verdict.paymentAmount);
+        console.log(
+          `[judge:${this.accountId}] HIVE token sent to winner ${verdict.winnerId} — txn: ${htsTxId}`,
+        );
+        await this.hcs.publish(this.topicIds.verdicts, {
+          type: "evidence",
+          taskId: verdict.taskId,
+          transactionId: htsTxId,
+          kind: "hts-reward",
+          recipient: verdict.winnerId,
+          amount: verdict.paymentAmount,
+          note: "HIVE reward to winning worker",
+        });
+      } catch (err) {
+        console.error(
+          `[judge:${this.accountId}] HIVE token transfer to winner failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
 
     // 2. Release HBAR from escrow account → actual winner
@@ -306,9 +327,72 @@ export class JudgeAgent {
       type: "evidence",
       taskId: verdict.taskId,
       transactionId: txnId,
+      kind: "escrow-release",
+      recipient: verdict.winnerId,
+      amount: escrowInfo.amount,
+      note: "HBAR escrow released to winner",
     });
 
+    // 4. Pay consolation prizes to losing workers that actually submitted a result.
+    // This ensures agent operators don't burn API credits for nothing — especially
+    // in quality mode where only the best submission wins.
+    await this.payConsolations(verdict, taskId);
+
     this.transitionTask(taskId, JudgeState.COMPLETED);
+  }
+
+  private async payConsolations(verdict: VerdictMessage, taskId: string): Promise<void> {
+    if (!this.htsService) {
+      return; // no HTS → can't pay consolations
+    }
+
+    const results = this.pendingResults.get(verdict.taskId) ?? [];
+    const losers = Array.from(
+      new Set(
+        results
+          .filter((r) => r.workerId !== verdict.winnerId)
+          .map((r) => r.workerId),
+      ),
+    );
+
+    if (losers.length === 0) {
+      return;
+    }
+
+    const consolationAmount = this.computeConsolationAmount(verdict.paymentAmount);
+    console.log(
+      `[judge:${this.accountId}] Paying ${consolationAmount} HIVE consolation to ${losers.length} losing worker(s) for task ${taskId}`,
+    );
+
+    for (const loserId of losers) {
+      try {
+        const txId = await this.htsService.transferToken(loserId, consolationAmount);
+        console.log(
+          `[judge:${this.accountId}] Consolation sent → ${loserId} (${consolationAmount} HIVE) — txn: ${txId}`,
+        );
+        await this.hcs.publish(this.topicIds.verdicts, {
+          type: "evidence",
+          taskId: verdict.taskId,
+          transactionId: txId,
+          kind: "consolation",
+          recipient: loserId,
+          amount: consolationAmount,
+          note: "Consolation prize for submitted losing result",
+        });
+      } catch (err) {
+        console.error(
+          `[judge:${this.accountId}] Consolation payout to ${loserId} failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+  }
+
+  private computeConsolationAmount(reward: number): number {
+    if (this.explicitConsolationPrize !== undefined) {
+      return Math.max(0, Math.floor(this.explicitConsolationPrize));
+    }
+    // Default: 10% of reward, rounded up, with a floor of 1.
+    return Math.max(1, Math.ceil(reward * 0.1));
   }
 
   // ── Shutdown ──
@@ -334,6 +418,7 @@ async function main(): Promise<void> {
   const { HCSService } = await import("../services/hcs.js");
   const { EscrowService: RealEscrowService } = await import("../services/escrow.js");
   const { LLMService: RealLLMService, MockLLMService } = await import("../services/llm.js");
+  const { HTSService } = await import("../services/hts.js");
   const { PrivateKey } = await import("@hiero-ledger/sdk");
 
   const client = createHederaClient();
@@ -365,13 +450,28 @@ async function main(): Promise<void> {
     llmService = new MockLLMService();
   }
 
+  // Wire HTSService so the Judge can reward the winner + consolation prizes to losers.
+  // The Judge account must be the token treasury (or hold sufficient balance).
+  const htsService = new HTSService(
+    client,
+    judgeConfig.tokenId,
+    judgeConfig.accountId,
+    judgeConfig.payerPrivateKey,
+  );
+
+  const consolationPrize = process.env.CONSOLATION_PRIZE
+    ? parseInt(process.env.CONSOLATION_PRIZE, 10)
+    : undefined;
+
   const judge = new JudgeAgent({
     accountId: judgeConfig.accountId,
     hcsService,
     topicIds,
     llmService,
     escrowService,
+    htsService,
     resultsWaitMs,
+    consolationPrize,
   });
 
   process.on("SIGINT", () => {

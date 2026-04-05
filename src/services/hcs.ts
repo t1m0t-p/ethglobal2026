@@ -17,10 +17,12 @@ export class HCSService implements IHCSService {
     this.client = client;
   }
 
-  async subscribe(topicId: string, onMessage: HCSMessageHandler): Promise<void> {
-    const handle = new TopicMessageQuery()
-      .setTopicId(topicId)
-      .subscribe(this.client, null, (topicMessage) => {
+  async subscribe(topicId: string, onMessage: HCSMessageHandler, startTime?: Date): Promise<void> {
+    const query = new TopicMessageQuery().setTopicId(topicId);
+    if (startTime) {
+      query.setStartTime(startTime);
+    }
+    const handle = query.subscribe(this.client, null, (topicMessage) => {
         const raw = Buffer.from(topicMessage.contents).toString("utf-8");
         const timestamp = topicMessage.consensusTimestamp.toString();
 
@@ -76,7 +78,7 @@ export class MockHCSService implements IHCSService {
   private handlers: Map<string, HCSMessageHandler[]> = new Map();
   private published: { topicId: string; message: HCSMessage }[] = [];
 
-  async subscribe(topicId: string, onMessage: HCSMessageHandler): Promise<void> {
+  async subscribe(topicId: string, onMessage: HCSMessageHandler, _startTime?: Date): Promise<void> {
     const existing = this.handlers.get(topicId) ?? [];
     existing.push(onMessage);
     this.handlers.set(topicId, existing);

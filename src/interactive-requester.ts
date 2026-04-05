@@ -24,7 +24,10 @@ interface TaskRecord {
   createdAt: string;
   verdict?: any;
   evidence?: any;
+  evidences?: any[];
   results?: any[];
+  bids?: any[];
+  escrow?: any;
 }
 
 export class InteractiveRequester {
@@ -118,7 +121,10 @@ export class InteractiveRequester {
       record.state = this.requester.getState();
       record.verdict = this.requester.getLastVerdict();
       record.evidence = this.requester.getLastEvidence();
+      record.evidences = this.requester.getEvidences();
       record.results = this.requester.getResults();
+      record.bids = this.requester.getAcceptedBids();
+      record.escrow = this.requester.getEscrowInfo();
       res.json(record);
     });
 
