@@ -81,6 +81,15 @@ export class InteractiveRequester {
     this.app = express();
     this.app.use(express.json());
 
+    // CORS — allow front-end dev server and any static host to call this API
+    this.app.use((_req: express.Request, res: express.Response, next: express.NextFunction) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      next();
+    });
+    this.app.options("/*splat", (_req: express.Request, res: express.Response) => res.sendStatus(204));
+
     this.app.post("/api/request", async (req: express.Request, res: express.Response) => {
       try {
         const body = req.body as BountyRequest;
@@ -267,9 +276,9 @@ async function main(): Promise<void> {
       hcsService,
       topicIds,
       escrowService,
-      maxBidsToAccept: 2,
+      maxBidsToAccept: 1,
     },
-    { defaultReward: 100, defaultMaxBids: 2 },
+    { defaultReward: 100, defaultMaxBids: 1 },
   );
 
   process.on("SIGINT", () => interactive.stop());

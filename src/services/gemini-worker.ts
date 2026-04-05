@@ -6,14 +6,32 @@ import { fetchWithPayment } from "./x402-client.js";
 // ──────────────────────────────────────────────
 
 export interface IGeminiWorkerService {
+  /**
+   * Returns true if this service can execute the given task.
+   * Used by the worker BEFORE bidding to avoid submitting wrong data.
+   */
+  supportsTask(description: string, category?: string): boolean;
+
   executeWithDescription(
     description: string,
     bountyContext: { taskId: string; reward: number },
   ): Promise<PriceData>;
 }
 
+// ── Shared helper ──────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the task is a cryptocurrency price fetch.
+ * Only these tasks can be executed without a real LLM (via x402).
+ */
+export function isCryptoTask(description: string, category?: string): boolean {
+  if (category === "crypto-price") return true;
+  const desc = description.toLowerCase();
+  return /\b(btc|bitcoin|eth|ethereum|crypto|cryptocurrency|hbar|hedera token)\b/.test(desc);
+}
+
 // ──────────────────────────────────────────────
-// MockGeminiWorkerService — aucune clé API, délègue à x402
+// MockGeminiWorkerService — no API key, x402-only for crypto tasks
 // ──────────────────────────────────────────────
 
 export class MockGeminiWorkerService implements IGeminiWorkerService {
@@ -22,15 +40,22 @@ export class MockGeminiWorkerService implements IGeminiWorkerService {
     private readonly paymentSigner: PaymentSigner,
   ) {}
 
+  supportsTask(description: string, category?: string): boolean {
+    return isCryptoTask(description, category);
+  }
+
   async executeWithDescription(
     description: string,
     bountyContext: { taskId: string; reward: number },
   ): Promise<PriceData> {
+    if (!isCryptoTask(description)) {
+      throw new Error(
+        `GEMINI_API_KEY is required to execute non-crypto task: "${description.slice(0, 80)}". ` +
+        `Set GEMINI_API_KEY in your .env to enable all task types.`,
+      );
+    }
     console.log(
-      `[mock-gemini-worker] No GEMINI_API_KEY — falling back to x402 fetch`,
-    );
-    console.log(
-      `[mock-gemini-worker] Task: "${description}" (${bountyContext.taskId})`,
+      `[mock-gemini-worker] Crypto task — fetching price via x402 (task: "${description.slice(0, 60)}")`,
     );
     const { priceData } = await fetchWithPayment(this.x402Url, this.paymentSigner);
     return priceData;
@@ -63,6 +88,11 @@ export class GeminiWorkerService implements IGeminiWorkerService {
     this.hederaAccountId = hederaAccountId;
     this.hederaPrivateKey = hederaPrivateKey;
     this.timeoutMs = timeoutMs;
+  }
+
+  // Real Gemini can handle any task (crypto or non-crypto)
+  supportsTask(_description: string, _category?: string): boolean {
+    return true;
   }
 
   async executeWithDescription(
@@ -162,7 +192,7 @@ export class GeminiWorkerService implements IGeminiWorkerService {
 
     const x402Tool = tool(
       async (_input: Record<string, never>): Promise<string> => {
-        console.log(`[gemini-worker] Calling x402_fetch_btc_price...`);
+        console.log(`[gemini-worker] Calling x402_fetch_price_data...`);
         const { priceData, paymentResponse } = await fetchWithPayment(
           x402ToolUrl,
           x402PaymentSigner,
@@ -173,12 +203,13 @@ export class GeminiWorkerService implements IGeminiWorkerService {
         return JSON.stringify(priceData);
       },
       {
-        name: "x402_fetch_btc_price",
+        name: "x402_fetch_price_data",
         description:
-          "Fetch BTC price data from multiple exchange sources (CoinGecko, Kraken, Binance) " +
-          "by making an x402 micropayment. Returns a JSON object: " +
+          "Fetch price data from multiple exchange sources via an x402 micropayment. " +
+          "Returns a JSON object: " +
           '{"sources": ["exchange1",...], "prices": [12345,...], "average": 12345.67}. ' +
-          "Use this when the task requires fetching BTC price data.",
+          "Use this ONLY when the task explicitly requires fetching cryptocurrency price data " +
+          "(e.g. BTC/USD, ETH/USD). Do NOT use for travel, delivery, or other non-crypto tasks.",
         schema: z.object({}),
       },
     );
@@ -231,15 +262,17 @@ export class GeminiWorkerService implements IGeminiWorkerService {
 
     const systemPrompt =
       `You are a Worker agent in a decentralized labor market on Hedera.\n` +
-      `Your job is to complete the given task by calling the appropriate tools.\n` +
-      `Use google_search to find real-world information (flights, prices, news, etc.).\n` +
-      `Use x402_fetch_btc_price specifically for BTC/crypto price data.\n` +
-      `When you have all the data needed, output ONLY a JSON object in this exact format and nothing else:\n` +
+      `Your job is to complete the given task by calling the appropriate tools.\n\n` +
+      `Tool selection:\n` +
+      `- Use google_search for real-world information: flights, travel, delivery rates, news, general prices, etc.\n` +
+      `- Use x402_fetch_price_data ONLY when the task explicitly asks for cryptocurrency price data (e.g. BTC/USD, ETH/USD).\n` +
+      `- Do NOT default to x402_fetch_price_data for non-crypto tasks.\n\n` +
+      `When you have gathered the data, output ONLY a JSON object in this exact format and nothing else:\n` +
       `{"sources": ["source1", "source2"], "prices": [123.45, 67.89], "average": 95.67}\n` +
       `Where:\n` +
-      `- "sources": array of strings identifying data sources (exchanges, airlines, websites, routes, etc.)\n` +
-      `- "prices": array of numbers (prices found, e.g. ticket prices in EUR, BTC prices in USD, etc.)\n` +
-      `- "average": the best or most representative single price as a number\n` +
+      `- "sources": array of strings identifying the data sources used (exchange names, airline names, websites, etc.)\n` +
+      `- "prices": array of numbers representing the values found (ticket prices, delivery rates, asset prices, etc.)\n` +
+      `- "average": the best or most representative single value as a number\n` +
       `Do not add markdown fences. Do not add any text before or after the JSON object.`;
 
     const userPrompt =

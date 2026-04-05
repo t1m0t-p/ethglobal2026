@@ -4,6 +4,7 @@ import type {
   BountyMessage,
   BidMessage,
   VerdictMessage,
+  EscrowMessage,
   HCSMessage,
 } from "../types/index.js";
 import { RequesterState } from "../types/index.js";
@@ -191,6 +192,17 @@ export class RequesterAgent {
       this.onEscrowCreated(this.escrowInfo);
     }
 
+    // Publish escrow info on HCS so the Judge can pick it up when running as a
+    // separate process (no shared memory). Judge subscribes to the bounties topic
+    // and will call setEscrowInfo() when it receives this message.
+    const escrowMsg: EscrowMessage = {
+      type: "escrow",
+      taskId: this.escrowInfo.taskId,
+      escrowAccountId: this.escrowInfo.escrowAccountId,
+      amount: this.escrowInfo.amount,
+    };
+    await this.hcs.publish(this.topicIds.bounties, escrowMsg);
+
     this.transition(RequesterState.AWAITING_RESULTS);
     console.log(
       `[requester:${this.accountId}] Escrow locked — account: ${this.escrowInfo.escrowAccountId}, amount: ${this.escrowInfo.amount} HBAR`,
@@ -268,11 +280,22 @@ async function main(): Promise<void> {
     process.exit(0);
   });
 
+  const description =
+    process.env.BOUNTY_DESCRIPTION ??
+    process.argv[2] ??
+    "Complete the assigned task and return structured results";
+  const taskIdPrefix = process.env.BOUNTY_TASK_PREFIX ?? "task";
+  const reward = process.env.BOUNTY_REWARD ? parseInt(process.env.BOUNTY_REWARD, 10) : 100;
+  const strategy = (process.env.BOUNTY_STRATEGY as import("../types/index.js").BountyStrategy) ?? "quality";
+  const category = process.env.BOUNTY_CATEGORY ?? "general";
+
   await requester.start({
-    taskId: `btc-price-${Date.now()}`,
-    description: "Fetch BTC price from 3 sources, return average",
-    reward: 100,
+    taskId: `${taskIdPrefix}-${Date.now()}`,
+    description,
+    reward,
     deadline: new Date(Date.now() + 300_000).toISOString(), // 5 minutes
+    strategy,
+    category,
   });
 
   console.log(`[requester] Running — waiting for bids...`);

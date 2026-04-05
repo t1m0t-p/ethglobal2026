@@ -20,8 +20,8 @@ import { RequesterAgent } from "./agents/requester.js";
 import { JudgeAgent } from "./agents/judge.js";
 import { HCSService } from "./services/hcs.js";
 import { EscrowService } from "./services/escrow.js";
-import { LLMService } from "./services/llm.js";
-import { createMockPaymentSigner } from "./services/x402-client.js";
+import { LLMService, MockLLMService } from "./services/llm.js";
+import { createRealPaymentSigner } from "./services/x402-client.js";
 import { createHederaClient, loadTopicIds, loadJudgeConfig, loadEscrowConfig, loadWorker2Config } from "./config/hedera.js";
 import { createGeminiWorkerService } from "./services/gemini-worker.js";
 import { PrivateKey } from "@hiero-ledger/sdk";
@@ -68,8 +68,20 @@ async function main(): Promise<void> {
     PrivateKey.fromStringDer(escrowConfig.escrowPrivateKey),
   );
 
-  // Initialize LLM service for Judge
-  const llmService = new LLMService(judgeConfig.anthropicApiKey);
+  // Initialize LLM service for Judge — respects LLM_PROVIDER env
+  const llmProvider = process.env.LLM_PROVIDER ?? "hardcoded";
+  let llmService: LLMService | MockLLMService;
+  if (llmProvider === "claude") {
+    if (!judgeConfig.anthropicApiKey) {
+      throw new Error("LLM_PROVIDER=claude requires ANTHROPIC_API_KEY to be set");
+    }
+    const model = process.env.ANTHROPIC_MODEL || undefined;
+    llmService = new LLMService(judgeConfig.anthropicApiKey, model);
+    console.log(`  LLM: Claude (model: ${model ?? "default"})`);
+  } else {
+    console.log("  LLM: deterministic (hardcoded)");
+    llmService = new MockLLMService();
+  }
 
   // ── Instantiate agents ─────────────────────────────────────────────────────
 
@@ -99,14 +111,22 @@ async function main(): Promise<void> {
   const worker = new WorkerAgent({
     workerId: accountId,
     hcsService,
-    paymentSigner: createMockPaymentSigner(accountId),
+    paymentSigner: createRealPaymentSigner(
+      client,
+      accountId,
+      PrivateKey.fromStringDer(process.env.HEDERA_PRIVATE_KEY!),
+    ),
     x402Url: X402_URL,
     topicIds,
     bidAmount: 50,
   });
 
   const worker2Config = loadWorker2Config();
-  const worker2PaymentSigner = createMockPaymentSigner(worker2Config.accountId);
+  const worker2PaymentSigner = createRealPaymentSigner(
+    client,
+    worker2Config.accountId,
+    PrivateKey.fromStringDer(worker2Config.privateKey),
+  );
   const worker2GeminiService = createGeminiWorkerService(X402_URL, worker2PaymentSigner, {
     geminiApiKey: worker2Config.geminiApiKey,
     hederaAccountId: worker2Config.accountId,
@@ -147,16 +167,16 @@ async function main(): Promise<void> {
 
   // ── Define the task ────────────────────────────────────────────────────────
 
-  const taskId = `btc-price-${Date.now()}`;
+  const taskId = `task-${Date.now()}`;
   const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 min
 
   const bountyParams = {
     taskId,
-    description: "Fetch BTC/USD price from 3 independent sources and return the average",
-    reward: 100,
+    description: process.env.BOUNTY_DESCRIPTION ?? "Fetch BTC/USD price from 3 independent sources and return the average",
+    reward: process.env.BOUNTY_REWARD ? parseInt(process.env.BOUNTY_REWARD, 10) : 100,
     deadline,
-    strategy: "quality" as const,
-    category: "crypto-price" as const,
+    strategy: (process.env.BOUNTY_STRATEGY as "quality" | "price") ?? "quality",
+    category: (process.env.BOUNTY_CATEGORY as import("./types/index.js").BountyCategory) ?? "crypto-price",
   };
 
   // ── Requester posts bounty ────────────────────────────────────────────────────

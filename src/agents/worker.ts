@@ -11,7 +11,7 @@ import type {
 } from "../types/index.js";
 import { WorkerState } from "../types/index.js";
 import { fetchWithPayment, createMockPaymentSigner } from "../services/x402-client.js";
-import type { IGeminiWorkerService } from "../services/gemini-worker.js";
+import { type IGeminiWorkerService, isCryptoTask } from "../services/gemini-worker.js";
 
 // ──────────────────────────────────────────────
 // Worker Agent — State Machine
@@ -108,6 +108,15 @@ export class WorkerAgent {
 
   // ── Bounty handling ──
 
+  // Returns true if this worker can execute the given bounty
+  private canExecuteTask(bounty: BountyMessage): boolean {
+    if (this.geminiWorker) {
+      return this.geminiWorker.supportsTask(bounty.description, bounty.category);
+    }
+    // Legacy path (no geminiWorker): only handle crypto-price tasks via x402
+    return isCryptoTask(bounty.description, bounty.category);
+  }
+
   private handleBounty(bounty: BountyMessage): void {
     if (this.state !== WorkerState.DISCOVERING) {
       console.log(
@@ -120,6 +129,15 @@ export class WorkerAgent {
     const deadline = new Date(bounty.deadline);
     if (deadline.getTime() < Date.now()) {
       console.log(`[worker:${this.workerId}] Skipping expired bounty ${bounty.taskId}`);
+      return;
+    }
+
+    // Check capability BEFORE bidding — never bid on tasks we can't execute
+    if (!this.canExecuteTask(bounty)) {
+      console.log(
+        `[worker:${this.workerId}] Skipping bounty ${bounty.taskId} — ` +
+        `task requires GEMINI_API_KEY: "${bounty.description.slice(0, 70)}"`,
+      );
       return;
     }
 
@@ -190,8 +208,13 @@ export class WorkerAgent {
       return priceData;
     }
 
-    // Legacy path — utilisé quand geminiWorker n'est pas injecté (ex: worker-mock)
-    console.log(`[worker:${this.workerId}] Fetching BTC price via x402 at ${this.x402Url}`);
+    // Legacy path — only for crypto-price tasks (x402 always returns price data)
+    if (!isCryptoTask(bounty.description, bounty.category)) {
+      throw new Error(
+        `Cannot execute non-crypto task without GEMINI_API_KEY: "${bounty.description.slice(0, 80)}"`,
+      );
+    }
+    console.log(`[worker:${this.workerId}] Fetching crypto price via x402 at ${this.x402Url}`);
 
     const { priceData, paymentResponse } = await fetchWithPayment(
       this.x402Url,
@@ -273,6 +296,8 @@ async function main(): Promise<void> {
   );
   const { HCSService } = await import("../services/hcs.js");
   const { createGeminiWorkerService } = await import("../services/gemini-worker.js");
+  const { createRealPaymentSigner } = await import("../services/x402-client.js");
+  const { PrivateKey } = await import("@hiero-ledger/sdk");
 
   const client = createHederaClient();
   const topicIds = loadTopicIds();
@@ -280,7 +305,11 @@ async function main(): Promise<void> {
   const x402Url = process.env.X402_SERVER_URL || "http://localhost:4020";
 
   const hcsService = new HCSService(client);
-  const paymentSigner = createMockPaymentSigner(workerConfig.accountId);
+  const paymentSigner = createRealPaymentSigner(
+    client,
+    workerConfig.accountId,
+    PrivateKey.fromStringDer(workerConfig.privateKey),
+  );
   const x402FullUrl = `${x402Url}/api/v1/btc-price`;
 
   // Factory : active GeminiWorkerService si GEMINI_API_KEY est présent, sinon Mock

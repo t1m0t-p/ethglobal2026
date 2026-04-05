@@ -5,6 +5,7 @@ import type {
   BidMessage,
   ResultMessage,
   VerdictMessage,
+  EscrowMessage,
   HCSMessage,
 } from "../types/index.js";
 import { JudgeState } from "../types/index.js";
@@ -69,6 +70,12 @@ export class JudgeAgent {
     return this.lastVerdict;
   }
 
+  // Per-task state accessor — use this in tests instead of getState() (which returns
+  // the agent-level state and stays MONITORING for the lifetime of the judge).
+  getTaskState(taskId: string): JudgeState {
+    return this.taskStates.get(taskId) ?? JudgeState.IDLE;
+  }
+
   // Inject escrow info from the Requester (wired by the demo orchestrator or callback)
   setEscrowInfo(taskId: string, info: EscrowInfo): void {
     this.escrowMap.set(taskId, info);
@@ -121,10 +128,13 @@ export class JudgeAgent {
 
     this.transition(JudgeState.MONITORING);
 
-    // Subscribe to bounties to capture task descriptions + strategy for LLM context
+    // Subscribe to bounties to capture task descriptions + strategy for LLM context,
+    // and to EscrowMessages published by the Requester after locking HBAR.
     await this.hcs.subscribe(this.topicIds.bounties, (message: HCSMessage) => {
       if (message.type === "bounty") {
         this.handleBounty(message);
+      } else if (message.type === "escrow") {
+        this.handleEscrowMessage(message);
       }
     });
 
@@ -154,6 +164,16 @@ export class JudgeAgent {
     console.log(
       `[judge:${this.accountId}] Tracking bounty ${bounty.taskId} — "${bounty.description}"`,
     );
+  }
+
+  // ── Escrow message handling — auto-wiring across processes ──
+
+  private handleEscrowMessage(msg: EscrowMessage): void {
+    this.setEscrowInfo(msg.taskId, {
+      escrowAccountId: msg.escrowAccountId,
+      taskId: msg.taskId,
+      amount: msg.amount,
+    });
   }
 
   // ── Bid handling — track for price-mode evaluation ──
@@ -226,7 +246,7 @@ export class JudgeAgent {
     const bids = this.pendingBids.get(taskId) ?? [];
     const evaluation = await this.llmService.evaluate(
       taskId,
-      bounty?.description ?? "Fetch BTC price from multiple sources",
+      bounty?.description ?? "Complete the assigned task and return results",
       results,
       bids,
       bounty?.strategy,
@@ -306,7 +326,7 @@ async function main(): Promise<void> {
   );
   const { HCSService } = await import("../services/hcs.js");
   const { EscrowService: RealEscrowService } = await import("../services/escrow.js");
-  const { LLMService: RealLLMService } = await import("../services/llm.js");
+  const { LLMService: RealLLMService, MockLLMService } = await import("../services/llm.js");
   const { PrivateKey } = await import("@hiero-ledger/sdk");
 
   const client = createHederaClient();
@@ -316,6 +336,7 @@ async function main(): Promise<void> {
   const resultsWaitMs = process.env.RESULTS_WAIT_MS
     ? parseInt(process.env.RESULTS_WAIT_MS, 10)
     : 30_000;
+  const llmProvider = process.env.LLM_PROVIDER ?? "hardcoded";
 
   const hcsService = new HCSService(client);
   const escrowService = new RealEscrowService(
@@ -323,7 +344,19 @@ async function main(): Promise<void> {
     escrowConfig.escrowAccountId,
     PrivateKey.fromStringDer(escrowConfig.escrowPrivateKey),
   );
-  const llmService = new RealLLMService(judgeConfig.anthropicApiKey);
+
+  let llmService: LLMService | MockLLMService;
+  if (llmProvider === "claude") {
+    if (!judgeConfig.anthropicApiKey) {
+      throw new Error("LLM_PROVIDER=claude requires ANTHROPIC_API_KEY to be set");
+    }
+    const model = process.env.ANTHROPIC_MODEL || undefined;
+    llmService = new RealLLMService(judgeConfig.anthropicApiKey, model);
+    console.log(`[judge] Using Claude LLM evaluation (model: ${model ?? "default"})`);
+  } else {
+    console.log("[judge] Using deterministic evaluation (LLM_PROVIDER=hardcoded)");
+    llmService = new MockLLMService();
+  }
 
   const judge = new JudgeAgent({
     accountId: judgeConfig.accountId,

@@ -77,13 +77,13 @@ export function loadJudgeConfig(): {
   accountId: string;
   payerPrivateKey: string;
   tokenId: string;
-  anthropicApiKey: string;
+  anthropicApiKey: string | undefined;
 } {
   return {
     accountId: envWithFallback("JUDGE_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
     payerPrivateKey: envWithFallback("JUDGE_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
     tokenId: requireEnv("HTS_TOKEN_ID"),
-    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   };
 }
 

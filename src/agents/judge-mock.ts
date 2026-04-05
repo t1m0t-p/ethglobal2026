@@ -109,8 +109,10 @@ async function runMockTest(): Promise<void> {
   console.log(`\n▶ Waiting ${RESULTS_WAIT_MS + 200}ms for evaluation timer...`);
   await new Promise((r) => setTimeout(r, RESULTS_WAIT_MS + 200));
 
-  // Step 8: Wait for full pipeline (evaluate → verdict → release) to complete
-  await waitForState(judge, JudgeState.COMPLETED, 5_000);
+  // Step 8: Wait for the per-task pipeline (evaluate → verdict → release) to complete.
+  // The agent-level state stays MONITORING (it's a long-running multi-task agent),
+  // so we poll the per-task state instead.
+  await waitForTaskState(judge, MOCK_BOUNTY.taskId, JudgeState.COMPLETED, 5_000);
 
   // Step 9: Verify verdict was published
   console.log("\n▶ Verifying published verdict...");
@@ -181,24 +183,26 @@ function assert(condition: boolean, message: string): void {
   console.log(`  ✓ ${message}`);
 }
 
-async function waitForState(
+// Poll the per-task state (agent-level state stays MONITORING — it's a persistent agent).
+async function waitForTaskState(
   judge: JudgeAgent,
+  taskId: string,
   target: JudgeState,
   timeoutMs: number,
 ): Promise<void> {
   const start = Date.now();
-  while (judge.getState() !== target) {
+  while (judge.getTaskState(taskId) !== target) {
     if (judge.getState() === JudgeState.ERROR) {
       throw new Error(`Judge entered ERROR state: ${judge.getErrorReason()}`);
     }
     if (Date.now() - start > timeoutMs) {
       throw new Error(
-        `Timeout waiting for state ${target} — stuck in ${judge.getState()}`,
+        `Timeout waiting for task ${taskId} to reach ${target} — stuck in ${judge.getTaskState(taskId)}`,
       );
     }
     await new Promise((r) => setTimeout(r, 100));
   }
-  console.log(`  ✓ Judge reached state: ${target}`);
+  console.log(`  ✓ Judge task ${taskId} reached state: ${target}`);
 }
 
 // ──────────────────────────────────────────────
@@ -266,7 +270,7 @@ async function runPriceModeTest(): Promise<void> {
   mockHCS.simulateMessage(MOCK_TOPIC_IDS.results, result2);
 
   await new Promise((r) => setTimeout(r, RESULTS_WAIT_MS + 200));
-  await waitForState(judge, JudgeState.COMPLETED, 5_000);
+  await waitForTaskState(judge, priceBounty.taskId, JudgeState.COMPLETED, 5_000);
 
   const published = mockHCS.getPublished();
   const verdicts = published.filter((m) => m.message.type === "verdict" && m.message.taskId === "price-mode-001");
