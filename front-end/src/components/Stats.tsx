@@ -4,6 +4,7 @@ import { motion, useInView, useMotionValue, useTransform, animate } from 'framer
 import { useEffect, useRef } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faBolt, faCoins, faLock, faXmark } from '@fortawesome/free-solid-svg-icons'
+import EscrowBanner from './EscrowBanner'
 
 function CountUp({
   value, prefix = '', suffix = '', decimals = 0, start,
@@ -129,6 +130,10 @@ export default function Stats() {
           {cards.map((card, i) => (
             <FeatureCard key={card.title} card={card} index={i} start={cardsInView} />
           ))}
+        </div>
+
+        <div className="mt-8">
+          <EscrowBanner />
         </div>
       </div>
     </section>
