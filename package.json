@@ -8,6 +8,7 @@
     "x402-server": "tsx src/x402-mock-server/server.ts",
     "worker:mock": "tsx src/agents/worker-mock.ts",
     "worker": "tsx src/agents/worker.ts",
+    "worker2": "tsx src/agents/worker2.ts",
     "requester:mock": "tsx src/agents/requester-mock.ts",
     "requester": "tsx src/agents/requester.ts",
     "judge:mock": "tsx src/agents/judge-mock.ts",
