@@ -49,6 +49,13 @@ export class LLMService {
       )
       .join("\n\n");
 
+    const taskLower = taskDescription.toLowerCase();
+    const isSeekingCheapest = taskLower.includes("cheap") || taskLower.includes("lowest") || taskLower.includes("min");
+
+    const cheapestCriteriaAddition = isSeekingCheapest
+      ? `CRITICAL OVERRIDE: The task description explicitly asks for the 'cheapest' or 'lowest' price. You MUST prioritize the submission with the LOWEST 'Average' price found. If there is a tie for the lowest average, then fall back to the standard criteria below.\n\n`
+      : "";
+
     const criteriaByStrategy =
       effectiveStrategy === "price"
         ? `EVALUATION CRITERIA — PRICE MODE (priority order):\n` +
@@ -65,6 +72,7 @@ export class LLMService {
       `TASK: ${taskDescription} (ID: ${taskId})\n` +
       `STRATEGY: ${effectiveStrategy}\n\n` +
       `SUBMISSIONS:\n${submissionsText}\n\n` +
+      cheapestCriteriaAddition +
       `${criteriaByStrategy}\n\n` +
       `To compute variance: for each submission, calculate the average of (price - mean)^2 across all its prices.\n\n` +
       `Respond ONLY with this JSON object and nothing else (no markdown, no code fences):\n` +
@@ -123,6 +131,9 @@ export class MockLLMService {
     const effectiveStrategy = strategy ?? "quality";
     const bidMap = new Map((bids ?? []).map((b) => [b.workerId, b]));
 
+    const taskLower = _taskDescription.toLowerCase();
+    const isSeekingCheapest = taskLower.includes("cheap") || taskLower.includes("lowest") || taskLower.includes("min");
+
     // Score each result
     const scored = results.map((r) => {
       const variance =
@@ -134,7 +145,14 @@ export class MockLLMService {
       return { result: r, sourcesCount: r.data.sources.length, variance, bidAmount };
     });
 
-    if (effectiveStrategy === "price") {
+    if (isSeekingCheapest) {
+      scored.sort((a, b) => {
+        if (a.result.data.average !== b.result.data.average) return a.result.data.average - b.result.data.average;
+        if (effectiveStrategy === "price" && a.bidAmount !== b.bidAmount) return a.bidAmount - b.bidAmount;
+        if (b.sourcesCount !== a.sourcesCount) return b.sourcesCount - a.sourcesCount;
+        return a.variance - b.variance;
+      });
+    } else if (effectiveStrategy === "price") {
       // Price mode: lowest bid first, then quality as tiebreaker
       scored.sort((a, b) => {
         if (a.bidAmount !== b.bidAmount) return a.bidAmount - b.bidAmount;
@@ -150,8 +168,9 @@ export class MockLLMService {
     }
 
     const winner = scored[0];
-    const reason =
-      effectiveStrategy === "price"
+    const reason = isSeekingCheapest
+      ? `Lowest average price ($${winner.result.data.average.toFixed(2)}) for cheapest request — algorithmic evaluation`
+      : effectiveStrategy === "price"
         ? `Lowest bid (${winner.bidAmount} HBAR) with ${winner.sourcesCount} sources — algorithmic evaluation (price mode)`
         : `Most price sources (${winner.sourcesCount}) with lowest variance (${winner.variance.toFixed(2)}) — algorithmic evaluation (quality mode)`;
 

@@ -232,7 +232,7 @@ async function runPriceModeTest(): Promise<void> {
   const priceBounty: BountyMessage = {
     type: "bounty",
     taskId: "price-mode-001",
-    description: "Find cheapest delivery rate Paris→Berlin",
+    description: "Find delivery rate Paris→Berlin",
     reward: 80,
     deadline: new Date(Date.now() + 60_000).toISOString(),
     requesterAddress: "0.0.MOCK_REQUESTER",

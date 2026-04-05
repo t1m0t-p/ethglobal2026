@@ -40,6 +40,7 @@ export class HardcodedJudgeProvider implements LLMJudgeProvider {
 
   async evaluate({
     submissions,
+    task,
   }: {
     submissions: ResultMessage[];
     task: BountyMessage;
@@ -53,6 +54,22 @@ export class HardcodedJudgeProvider implements LLMJudgeProvider {
       return {
         winnerId: only.workerId,
         reason: "Only submission received — automatic winner",
+      };
+    }
+
+    const taskLower = task.description.toLowerCase();
+    const isSeekingCheapest = taskLower.includes("cheap") || taskLower.includes("lowest") || taskLower.includes("min");
+
+    if (isSeekingCheapest) {
+      let best = submissions[0]!;
+      for (const sub of submissions.slice(1)) {
+        if (sub.data.average < best.data.average) {
+          best = sub;
+        }
+      }
+      return {
+        winnerId: best.workerId,
+        reason: `Price average $${best.data.average.toFixed(2)} was the absolute lowest submitted for cheapest request.`,
       };
     }
 
@@ -125,6 +142,13 @@ export class ClaudeJudgeProvider implements LLMJudgeProvider {
       )
       .join("\n\n");
 
+    const taskLower = task.description.toLowerCase();
+    const isSeekingCheapest = taskLower.includes("cheap") || taskLower.includes("lowest") || taskLower.includes("min");
+
+    const cheapestCriteriaAddition = isSeekingCheapest
+      ? "CRITICAL OVERRIDE: The task asks for the cheapest or lowest price. You MUST pick the submission with the LOWEST 'average' price.\n\n"
+      : "";
+
     const prompt = `You are a judge evaluating price-fetching submissions for a decentralized labor market.
 
 Task: ${task.description}
@@ -133,7 +157,7 @@ Reward: ${task.reward} HIVE tokens
 ${submissionText}
 
 Your job: pick the single most accurate and trustworthy submission.
-Evaluation criteria (in order of importance):
+${cheapestCriteriaAddition}Evaluation criteria (in order of importance):
 1. Price average closest to the consensus median across all submissions
 2. Number of sources used (more = better)
 3. Consistency between sources (low spread = better)
