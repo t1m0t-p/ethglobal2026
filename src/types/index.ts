@@ -24,6 +24,7 @@ export interface BountyMessage {
   requesterAddress: string;
   strategy?: BountyStrategy;  // "price" = cheapest bid wins, "quality" = best result wins (default)
   category?: BountyCategory;  // optional label for display/filtering
+  maxWorkers?: number;         // max workers accepted for this bounty (overrides RequesterConfig.maxBidsToAccept)
 }
 
 export interface BidMessage {

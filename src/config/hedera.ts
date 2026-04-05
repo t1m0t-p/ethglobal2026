@@ -66,10 +66,15 @@ export function loadWorker2Config(): {
   };
 }
 
-export function loadRequesterConfig(): { accountId: string; privateKey: string } {
+export function loadRequesterConfig(): {
+  accountId: string;
+  privateKey: string;
+  bidTimeoutMs: number | undefined;
+} {
   return {
     accountId: envWithFallback("REQUESTER_ACCOUNT_ID", "HEDERA_ACCOUNT_ID"),
     privateKey: envWithFallback("REQUESTER_PRIVATE_KEY", "HEDERA_PRIVATE_KEY"),
+    bidTimeoutMs: process.env.BID_TIMEOUT_MS ? parseInt(process.env.BID_TIMEOUT_MS, 10) : undefined,
   };
 }
 

@@ -6,11 +6,13 @@
 #   ./scripts/launch.sh mock     # launch all agents in mock mode (no Hedera)
 #   ./scripts/launch.sh demo     # launch the demo orchestrator in a single pane
 #
-# Layout (4 panes):
+# Layout (5 panes):
 #   ┌──────────────────┬──────────────────┐
 #   │   x402 Server    │    Judge         │
 #   ├──────────────────┼──────────────────┤
-#   │   Worker         │    Requester     │
+#   │   Worker 1       │    Requester     │
+#   ├──────────────────┤                  │
+#   │   Worker 2       │                  │
 #   └──────────────────┴──────────────────┘
 #
 # Controls:
@@ -48,56 +50,64 @@ if [ "$MODE" = "mock" ]; then
   X402_CMD="npm run x402-server"
   REQUESTER_CMD="npm run requester:mock"
   WORKER_CMD="npm run worker:mock"
+  WORKER2_CMD="npm run worker:mock"
   JUDGE_CMD="npm run judge:mock"
   LABEL="MOCK MODE"
 else
   X402_CMD="npm run x402-server"
   REQUESTER_CMD="npm run requester:interactive"
   WORKER_CMD="npm run worker"
+  WORKER2_CMD="npm run worker2"
   JUDGE_CMD="npm run judge"
   LABEL="TESTNET MODE"
 fi
 
-# ── Build 4-pane layout ──
+# ── Build 5-pane layout ──
 #
-# Start with one pane (0), split right → (0 left, 1 right),
-# then split each half vertically.
-#
-#  0 (top-left)  | 1 (top-right)
-#  --------------+---------------
-#  2 (bot-left)  | 3 (bot-right)
+#  0 (top-left)    | 1 (top-right)
+#  -----------------+---------------
+#  2 (mid-left)    | 3 (right, tall)
+#  -----------------+
+#  4 (bot-left)    |
 
 COLS=$(tput cols)
 LINES=$(tput lines)
 
 tmux new-session -d -s "$SESSION" -c "$PROJECT_DIR" -x "$COLS" -y "$LINES"
 
-# Split right (creates pane 1)
+# Split right → pane 1 (right column)
 tmux split-window -h -t "$SESSION:0.0" -c "$PROJECT_DIR"
 
-# Split pane 0 down (creates pane 2 below pane 0)
+# Split pane 0 down → pane 2 (mid-left, below x402)
 tmux split-window -v -t "$SESSION:0.0" -c "$PROJECT_DIR"
 
-# Split pane 1 down (creates pane 3 below pane 1)
+# Split pane 2 down → pane 3 (bot-left, Worker 2)
+tmux split-window -v -t "$SESSION:0.2" -c "$PROJECT_DIR"
+
+# Split pane 1 down → pane 4 (bot-right, Requester)
 tmux split-window -v -t "$SESSION:0.1" -c "$PROJECT_DIR"
 
 # ── Send commands to each pane ──
 
-# Pane 0 — x402 Server (top-left), starts immediately
+# Pane 0 — x402 Server (top-left)
 tmux select-pane -t "$SESSION:0.0" -T "x402-server"
 tmux send-keys -t "$SESSION:0.0" "$(run_cmd 'x402 Server' 0 "$X402_CMD")" Enter
 
-# Pane 2 — Worker (bottom-left), slight delay for x402 to come up
-tmux select-pane -t "$SESSION:0.2" -T "worker"
-tmux send-keys -t "$SESSION:0.2" "$(run_cmd 'Worker' 2 "$WORKER_CMD")" Enter
+# Pane 2 — Worker 1 (mid-left), slight delay for x402 to come up
+tmux select-pane -t "$SESSION:0.2" -T "worker-1"
+tmux send-keys -t "$SESSION:0.2" "$(run_cmd 'Worker 1' 2 "$WORKER_CMD")" Enter
 
-# Pane 1 — Judge (top-right), slight delay for subscriptions
+# Pane 3 — Worker 2 (bot-left), same delay
+tmux select-pane -t "$SESSION:0.3" -T "worker-2"
+tmux send-keys -t "$SESSION:0.3" "$(run_cmd 'Worker 2' 2 "$WORKER2_CMD")" Enter
+
+# Pane 1 — Judge (top-right)
 tmux select-pane -t "$SESSION:0.1" -T "judge"
 tmux send-keys -t "$SESSION:0.1" "$(run_cmd 'Judge' 2 "$JUDGE_CMD")" Enter
 
-# Pane 3 — Requester (bottom-right), starts after worker+judge are up
-tmux select-pane -t "$SESSION:0.3" -T "requester (interactive · :3100)"
-tmux send-keys -t "$SESSION:0.3" "$(run_cmd 'Requester (interactive)' 4 "$REQUESTER_CMD")" Enter
+# Pane 4 — Requester (bot-right), starts after workers+judge are up
+tmux select-pane -t "$SESSION:0.4" -T "requester (interactive)"
+tmux send-keys -t "$SESSION:0.4" "$(run_cmd 'Requester (interactive)' 4 "$REQUESTER_CMD")" Enter
 
 # ── Status bar ──
 tmux set-option -t "$SESSION" status-left "#[fg=black,bg=cyan,bold] HIVERA — $LABEL "
@@ -107,6 +117,6 @@ tmux set-option -t "$SESSION" pane-border-status top
 tmux set-option -t "$SESSION" pane-border-format " #[bold]#{pane_title}#[default] "
 
 # Focus requester pane
-tmux select-pane -t "$SESSION:0.3"
+tmux select-pane -t "$SESSION:0.4"
 
 tmux attach -t "$SESSION"

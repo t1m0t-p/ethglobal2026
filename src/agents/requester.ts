@@ -23,7 +23,8 @@ export interface RequesterConfig {
   hcsService: IHCSService;
   topicIds: TopicIds;
   escrowService: EscrowService | MockEscrowService;
-  maxBidsToAccept?: number; // default 2
+  maxBidsToAccept?: number; // default 2 — can be overridden per bounty via BountyMessage.maxWorkers
+  bidTimeoutMs?: number;    // default 60_000 — how long to wait for bids before proceeding with available workers
   onEscrowCreated?: (info: EscrowInfo) => void; // called after escrow is locked — use to wire Judge
 }
 
@@ -35,9 +36,11 @@ export class RequesterAgent {
   private readonly topicIds: TopicIds;
   private readonly escrowService: EscrowService | MockEscrowService;
   private readonly maxBidsToAccept: number;
+  private readonly bidTimeoutMs: number;
   private readonly onEscrowCreated?: (info: EscrowInfo) => void;
 
   private currentBounty: BountyMessage | null = null;
+  private effectiveMaxBids: number; // maxBidsToAccept overridden per-bounty by BountyMessage.maxWorkers
   private acceptedBids: BidMessage[] = [];
   private results: ResultMessage[] = [];
   private lastVerdict: VerdictMessage | null = null;
@@ -45,6 +48,7 @@ export class RequesterAgent {
   private escrowInfo: EscrowInfo | null = null;
   private errorReason: string | null = null;
   private isEscrowing = false; // guard against double-call from concurrent bid handlers
+  private bidTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: RequesterConfig) {
     this.accountId = config.accountId;
@@ -53,6 +57,8 @@ export class RequesterAgent {
     this.topicIds = config.topicIds;
     this.escrowService = config.escrowService;
     this.maxBidsToAccept = config.maxBidsToAccept ?? 2;
+    this.bidTimeoutMs = config.bidTimeoutMs ?? 60_000;
+    this.effectiveMaxBids = this.maxBidsToAccept;
     this.onEscrowCreated = config.onEscrowCreated;
   }
 
@@ -98,7 +104,12 @@ export class RequesterAgent {
   }
 
   reset(): void {
+    if (this.bidTimeoutTimer !== null) {
+      clearTimeout(this.bidTimeoutTimer);
+      this.bidTimeoutTimer = null;
+    }
     this.currentBounty = null;
+    this.effectiveMaxBids = this.maxBidsToAccept;
     this.acceptedBids = [];
     this.results = [];
     this.lastVerdict = null;
@@ -149,6 +160,9 @@ export class RequesterAgent {
     };
     this.currentBounty = bounty;
 
+    // Override maxBids per-bounty if specified
+    this.effectiveMaxBids = bounty.maxWorkers ?? this.maxBidsToAccept;
+
     this.transition(RequesterState.POSTING);
     await this.hcs.publish(this.topicIds.bounties, bounty);
 
@@ -157,8 +171,14 @@ export class RequesterAgent {
     );
     this.transition(RequesterState.AWAITING_BIDS);
     console.log(
-      `[requester:${this.accountId}] Waiting for bids (max: ${this.maxBidsToAccept})...`,
+      `[requester:${this.accountId}] Waiting for bids (max: ${this.effectiveMaxBids}, timeout: ${this.bidTimeoutMs}ms)...`,
     );
+
+    // Start bid timeout — proceed with available workers if not enough bid in time
+    this.bidTimeoutTimer = setTimeout(() => {
+      this.bidTimeoutTimer = null;
+      this.handleBidTimeout();
+    }, this.bidTimeoutMs);
   }
 
   // ── Bid handling ──
@@ -178,23 +198,44 @@ export class RequesterAgent {
     }
 
     // Guard: already have enough bids — isEscrowing prevents race conditions
-    if (this.acceptedBids.length >= this.maxBidsToAccept || this.isEscrowing) {
+    if (this.acceptedBids.length >= this.effectiveMaxBids || this.isEscrowing) {
       console.log(
-        `[requester:${this.accountId}] Ignoring excess bid from ${bid.workerId} — already have ${this.acceptedBids.length}/${this.maxBidsToAccept}`,
+        `[requester:${this.accountId}] Ignoring excess bid from ${bid.workerId} — already have ${this.acceptedBids.length}/${this.effectiveMaxBids}`,
       );
       return;
     }
 
     this.acceptedBids.push(bid);
     console.log(
-      `[requester:${this.accountId}] Accepted bid ${this.acceptedBids.length}/${this.maxBidsToAccept} from ${bid.workerId} — ${bid.bidAmount} HBAR`,
+      `[requester:${this.accountId}] Accepted bid ${this.acceptedBids.length}/${this.effectiveMaxBids} from ${bid.workerId} — ${bid.bidAmount} HBAR`,
     );
 
-    if (this.acceptedBids.length >= this.maxBidsToAccept) {
+    if (this.acceptedBids.length >= this.effectiveMaxBids) {
+      // Got all the workers we wanted — cancel timeout and lock escrow immediately
+      if (this.bidTimeoutTimer !== null) {
+        clearTimeout(this.bidTimeoutTimer);
+        this.bidTimeoutTimer = null;
+      }
       this.isEscrowing = true;
       this.lockEscrow().catch((err) => {
         this.transitionToError(err instanceof Error ? err.message : String(err));
       });
+    }
+  }
+
+  private handleBidTimeout(): void {
+    if (this.state !== RequesterState.AWAITING_BIDS) return;
+
+    if (this.acceptedBids.length >= 1) {
+      console.log(
+        `[requester:${this.accountId}] Bid timeout — proceeding with ${this.acceptedBids.length}/${this.effectiveMaxBids} worker(s)`,
+      );
+      this.isEscrowing = true;
+      this.lockEscrow().catch((err) => {
+        this.transitionToError(err instanceof Error ? err.message : String(err));
+      });
+    } else {
+      this.transitionToError("Bid timeout: no workers responded");
     }
   }
 
@@ -281,6 +322,10 @@ export class RequesterAgent {
   // ── Shutdown ──
 
   stop(): void {
+    if (this.bidTimeoutTimer !== null) {
+      clearTimeout(this.bidTimeoutTimer);
+      this.bidTimeoutTimer = null;
+    }
     this.hcs.disconnect();
     console.log(`[requester:${this.accountId}] Stopped`);
   }
@@ -317,6 +362,7 @@ async function main(): Promise<void> {
     topicIds,
     escrowService,
     maxBidsToAccept: 2,
+    bidTimeoutMs: requesterConfig.bidTimeoutMs,
   });
 
   process.on("SIGINT", () => {

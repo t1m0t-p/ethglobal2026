@@ -13,7 +13,7 @@ interface BountyRequest {
   strategy?: BountyStrategy;
   category?: BountyCategory;
   reward?: number;
-  maxBids?: number;
+  maxWorkers?: number;
   deadlineMinutes?: number;
 }
 
@@ -71,6 +71,7 @@ export class InteractiveRequester {
       deadline: new Date(Date.now() + deadlineMinutes * 60_000).toISOString(),
       strategy: req.strategy ?? "quality",
       category: req.category ?? "general",
+      maxWorkers: req.maxWorkers,
     });
 
     record.state = "awaiting_bids";
@@ -127,7 +128,7 @@ export class InteractiveRequester {
 
     this.server = this.app.listen(port, () => {
       console.log(`[api] HTTP API listening on http://localhost:${port}`);
-      console.log(`  POST /api/request  — { description, strategy?, category?, reward?, maxBids?, deadlineMinutes? }`);
+      console.log(`  POST /api/request  — { description, strategy?, category?, reward?, maxWorkers?, deadlineMinutes? }`);
       console.log(`  GET  /api/status/:taskId`);
       console.log(`  GET  /api/tasks`);
     });
@@ -214,6 +215,9 @@ export class InteractiveRequester {
     const rewardInput = await ask(`  Reward in HBAR [${this.defaultReward}]: `);
     const reward = rewardInput.trim() ? parseInt(rewardInput, 10) : this.defaultReward;
 
+    const maxWorkersInput = await ask(`  Max workers [${this.defaultMaxBids}]: `);
+    const maxWorkers = maxWorkersInput.trim() ? parseInt(maxWorkersInput, 10) : this.defaultMaxBids;
+
     const deadlineInput = await ask("  Deadline in minutes [5]: ");
     const deadlineMinutes = deadlineInput.trim() ? parseInt(deadlineInput, 10) : 5;
 
@@ -222,6 +226,7 @@ export class InteractiveRequester {
       strategy,
       category,
       reward,
+      maxWorkers,
       deadlineMinutes,
     });
   }
@@ -282,9 +287,10 @@ async function main(): Promise<void> {
       hcsService,
       topicIds,
       escrowService,
-      maxBidsToAccept: 1,
+      maxBidsToAccept: 2,
+      bidTimeoutMs: requesterConfig.bidTimeoutMs,
     },
-    { defaultReward: 100, defaultMaxBids: 1 },
+    { defaultReward: 100, defaultMaxBids: 2 },
   );
 
   process.on("SIGINT", () => interactive.stop());

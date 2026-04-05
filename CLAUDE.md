@@ -17,7 +17,8 @@ npm run build           # TypeScript type-check only (tsc --noEmit, no emit)
 npm run setup           # Create HCS topics + HTS token on testnet, print IDs for .env
 
 # Full demo orchestration
-npm run demo            # Run complete multi-agent flow: Requester → Workers → Judge
+npm run demo            # Run complete multi-agent flow: Requester → Workers → Judge (mock payments)
+npm run demo:real       # Same flow but with real HBAR payment signing (requires GEMINI_API_KEY)
 
 # x402 mock server (used by demo)
 npm run x402-server     # Start mock x402 payment server on port 4020
@@ -25,13 +26,23 @@ npm run x402-server     # Start mock x402 payment server on port 4020
 # Individual agents (unit-testable E2E flows, no shared state)
 npm run requester:mock  # Requester E2E test — no Hedera, no external deps
 npm run requester       # Requester against real Hedera testnet
+npm run requester:interactive  # Interactive CLI for posting bounties with live input
 npm run worker:mock     # Worker E2E test — no Hedera, no external deps
 npm run worker          # Worker against real Hedera testnet (x402 payment flow)
 npm run judge:mock      # Judge E2E test — no Hedera, no LLM API key required
 npm run judge           # Judge against real Hedera testnet
+
+# tmux multi-pane launcher (requires tmux)
+npm run launch          # Launch all agents in split panes against real Hedera testnet
+npm run launch:mock     # Launch all agents in split panes in mock mode (no Hedera)
+npm run launch:demo     # Launch demo orchestrator in a single pane
+
+# Unit tests (Jest)
+npx jest                # Run all unit tests in src/__tests__/
+npx jest --testPathPattern=hcs  # Run a single test file
 ```
 
-> No test runner is configured. `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E test with assertions that exits 0 on success. The `demo` script orchestrates all agents and services in one process.
+> `tsx` runs TypeScript directly. Each `*:mock` script is a self-contained E2E test with assertions that exits 0 on success. The `demo` script orchestrates all agents and services in one process. Unit tests in `src/__tests__/` use Jest with `ts-jest` (ESM preset).
 
 ## Architecture
 
@@ -66,6 +77,11 @@ Judge     → [HCS: verdicts] → posts winner; executes HTS token transfer to w
 - **`price-fetcher.ts`** — Fetches BTC price from CoinGecko, Kraken, and Binance in parallel. Requires ≥2 successful sources.
 - **`gemini-worker.ts`** — Worker variant powered by Google Gemini 2.5 Flash + Hedera Agent Kit for autonomous task execution (requires `GEMINI_API_KEY`).
 - **`logger.ts`** — Winston-based structured logging for all agents and services.
+
+### CLI Utilities (`src/cli/`)
+
+- **`output.ts`** — `CLIOutput` static class with chalk-based formatted console output (headers, stages, info labels, success/error/warning). Used by demo and interactive scripts.
+- **`demo-output.ts`** — Structured output helpers specific to the demo orchestrator flow.
 
 ### x402 Mock Server (`src/x402-mock-server/server.ts`)
 
@@ -128,7 +144,7 @@ npm run requester:mock  # Tests Requester E2E flow (post bounty → collect bids
 npm run judge:mock      # Tests Judge E2E flow (collect results → evaluate → verdict)
 ```
 
-No test runner configured; assertions are inline assertions in `*:mock.ts` files. Exit code 0 = success, non-zero = failure.
+Inline E2E assertions in `*:mock.ts` files — exit code 0 = success, non-zero = failure. Unit tests in `src/__tests__/` cover data validation and evaluation logic (bounty schema, HCS message format, ranking, strategy, verdict). Run with `npx jest`; config in `jest.config.js` (ts-jest ESM preset, matches `**/__tests__/**/*.test.ts`).
 
 ## Key Design Decisions
 
@@ -136,6 +152,7 @@ No test runner configured; assertions are inline assertions in `*:mock.ts` files
 - **Agents check `import.meta.url` vs `process.argv[1]`** to detect direct execution — the ESM equivalent of `if __name__ == '__main__'`.
 - **Dependency injection pattern**: All agents and services accept injected dependencies, enabling full testability without Hedera or API calls. The CLI entrypoint wires real services; `*-mock.ts` files wire mocks.
 - **Dual Worker implementations**: Standard `worker.ts` uses x402 payment protocol; `gemini-worker.ts` uses Google Gemini 2.5 Flash with Hedera Agent Kit for autonomous execution.
+- **Two demo modes**: `demo.ts` uses mock payment signatures (no real HBAR spent); `demo-real.ts` uses `createRealPaymentSigner` for actual Hedera transfers and real Gemini API if `GEMINI_API_KEY` is set.
 - **Configurable Judge evaluation**: `LLM_PROVIDER` env controls verdict logic: `hardcoded` (deterministic, no API key) or `claude` (uses Claude API).
 - **x402 is mocked on Hedera**: Real x402 targets EVM chains. The mock on Hedera demonstrates payment choreography and protocol flow.
 - **Judge uses debounce, not a fixed count**: The `resultsWaitMs` timer resets on each new result, so the Judge evaluates `resultsWaitMs` after the *last* result arrives, not after a fixed number.

@@ -140,6 +140,7 @@ export default function DemoForm() {
   const [strategy, setStrategy] = useState<Strategy>('quality')
   const [category, setCategory] = useState<Category>('crypto-price')
   const [reward, setReward] = useState(100)
+  const [maxWorkers, setMaxWorkers] = useState(2)
   const [deadlineMinutes, setDeadlineMinutes] = useState(5)
   const [taskId, setTaskId] = useState<string | null>(null)
   const [demoMode, setDemoMode] = useState(false)
@@ -156,7 +157,7 @@ export default function DemoForm() {
       const res = await fetch(`${API_BASE}/api/request`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description, strategy, category, reward, deadlineMinutes }),
+        body: JSON.stringify({ description, strategy, category, reward, maxWorkers, deadlineMinutes }),
       })
 
       if (!res.ok) {
@@ -182,6 +183,7 @@ export default function DemoForm() {
     setDemoMode(false)
     setError(null)
     setDescription('')
+    setMaxWorkers(2)
   }
 
   return (
@@ -227,8 +229,8 @@ export default function DemoForm() {
               {/* Category */}
               <CategoryPills value={category} onChange={setCategory} />
 
-              {/* Reward + deadline in a row */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Reward + max workers + deadline in a row */}
+              <div className="grid grid-cols-3 gap-4">
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-charcoal/50 uppercase tracking-widest">
                     Reward (HBAR)
@@ -238,6 +240,19 @@ export default function DemoForm() {
                     min={1}
                     value={reward}
                     onChange={(e) => setReward(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="rounded-2xl border-2 border-charcoal/10 focus:border-mint focus:outline-none px-4 py-2.5 text-sm text-charcoal transition-colors"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-charcoal/50 uppercase tracking-widest">
+                    Max workers
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={maxWorkers}
+                    onChange={(e) => setMaxWorkers(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
                     className="rounded-2xl border-2 border-charcoal/10 focus:border-mint focus:outline-none px-4 py-2.5 text-sm text-charcoal transition-colors"
                   />
                 </div>
@@ -383,7 +398,7 @@ export default function DemoForm() {
                   <p className="text-xs font-bold text-charcoal/40 uppercase tracking-wider mb-1">Description</p>
                   <p className="text-charcoal font-medium">{description || EXAMPLE_PROMPTS[0]}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                   <div>
                     <p className="text-xs font-bold text-charcoal/40 uppercase tracking-wider mb-1">Strategy</p>
                     <p className="font-semibold text-charcoal capitalize">{strategy}</p>
@@ -391,6 +406,10 @@ export default function DemoForm() {
                   <div>
                     <p className="text-xs font-bold text-charcoal/40 uppercase tracking-wider mb-1">Reward</p>
                     <p className="font-semibold text-charcoal">{reward} HBAR</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-charcoal/40 uppercase tracking-wider mb-1">Workers</p>
+                    <p className="font-semibold text-charcoal">max {maxWorkers}</p>
                   </div>
                   <div>
                     <p className="text-xs font-bold text-charcoal/40 uppercase tracking-wider mb-1">Deadline</p>

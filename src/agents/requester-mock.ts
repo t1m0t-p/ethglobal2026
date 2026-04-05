@@ -163,6 +163,122 @@ async function runMockTest(): Promise<void> {
   console.log("═══════════════════════════════════════════\n");
 }
 
+// ── Scenario B: Bid timeout with 1 worker — proceeds with partial bids ──
+
+async function runTimeoutPartialTest(): Promise<void> {
+  console.log("═══════════════════════════════════════════");
+  console.log("  Requester Mock — Bid Timeout (1/2 workers)");
+  console.log("═══════════════════════════════════════════\n");
+
+  const mockHCS = new MockHCSService();
+  const mockEscrow = new MockEscrowService();
+  const mockPrivateKey = PrivateKey.generate();
+
+  const requester = new RequesterAgent({
+    accountId: REQUESTER_ID,
+    privateKey: mockPrivateKey,
+    hcsService: mockHCS,
+    topicIds: MOCK_TOPIC_IDS,
+    escrowService: mockEscrow,
+    maxBidsToAccept: 2,
+    bidTimeoutMs: 300, // short timeout for test speed
+  });
+
+  await requester.start(MOCK_BOUNTY_PARAMS);
+  assertState(requester, RequesterState.AWAITING_BIDS);
+
+  // Only 1 worker bids
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, MOCK_BID_1);
+
+  // Wait for timeout to fire and escrow to lock with 1 worker
+  await waitForState(requester, RequesterState.AWAITING_RESULTS, 2_000);
+
+  const acceptedBids = requester.getAcceptedBids();
+  assert(acceptedBids.length === 1, `Proceeded with 1 worker despite maxBidsToAccept=2 (got ${acceptedBids.length})`);
+  assert(requester.getEscrowInfo() !== null, "Escrow was created with partial workers");
+
+  requester.stop();
+  console.log("\n═══════════════════════════════════════════");
+  console.log("  ✓ Timeout partial test passed!");
+  console.log("═══════════════════════════════════════════\n");
+}
+
+// ── Scenario C: Bid timeout with 0 workers — transitions to ERROR ──
+
+async function runTimeoutNoWorkersTest(): Promise<void> {
+  console.log("═══════════════════════════════════════════");
+  console.log("  Requester Mock — Bid Timeout (0 workers)");
+  console.log("═══════════════════════════════════════════\n");
+
+  const mockHCS = new MockHCSService();
+  const mockEscrow = new MockEscrowService();
+  const mockPrivateKey = PrivateKey.generate();
+
+  const requester = new RequesterAgent({
+    accountId: REQUESTER_ID,
+    privateKey: mockPrivateKey,
+    hcsService: mockHCS,
+    topicIds: MOCK_TOPIC_IDS,
+    escrowService: mockEscrow,
+    maxBidsToAccept: 2,
+    bidTimeoutMs: 300, // short timeout for test speed
+  });
+
+  await requester.start(MOCK_BOUNTY_PARAMS);
+  assertState(requester, RequesterState.AWAITING_BIDS);
+
+  // No bids — let the timeout fire
+  await waitForStateAllowError(requester, RequesterState.ERROR, 2_000);
+
+  assert(
+    requester.getErrorReason() === "Bid timeout: no workers responded",
+    `Error reason is correct (got: "${requester.getErrorReason()}")`,
+  );
+  assert(requester.getEscrowInfo() === null, "No escrow created when 0 workers responded");
+
+  requester.stop();
+  console.log("\n═══════════════════════════════════════════");
+  console.log("  ✓ Timeout no-workers test passed!");
+  console.log("═══════════════════════════════════════════\n");
+}
+
+// ── Scenario D: maxWorkers per-bounty override ──
+
+async function runMaxWorkersOverrideTest(): Promise<void> {
+  console.log("═══════════════════════════════════════════");
+  console.log("  Requester Mock — maxWorkers per-bounty override");
+  console.log("═══════════════════════════════════════════\n");
+
+  const mockHCS = new MockHCSService();
+  const mockEscrow = new MockEscrowService();
+  const mockPrivateKey = PrivateKey.generate();
+
+  // Agent default is 2, but bounty overrides to 1
+  const requester = new RequesterAgent({
+    accountId: REQUESTER_ID,
+    privateKey: mockPrivateKey,
+    hcsService: mockHCS,
+    topicIds: MOCK_TOPIC_IDS,
+    escrowService: mockEscrow,
+    maxBidsToAccept: 2,
+    bidTimeoutMs: 5_000,
+  });
+
+  await requester.start({ ...MOCK_BOUNTY_PARAMS, taskId: "btc-price-fetch-override", maxWorkers: 1 });
+  assertState(requester, RequesterState.AWAITING_BIDS);
+
+  // Only 1 bid needed — should lock escrow immediately without timeout
+  mockHCS.simulateMessage(MOCK_TOPIC_IDS.bids, { ...MOCK_BID_1, taskId: "btc-price-fetch-override" });
+  await waitForState(requester, RequesterState.AWAITING_RESULTS, 2_000);
+
+  assert(requester.getAcceptedBids().length === 1, "Exactly 1 bid accepted (maxWorkers=1 override)");
+
+  requester.stop();
+  console.log("\n═══════════════════════════════════════════");
+  console.log("  ✓ maxWorkers override test passed!");
+  console.log("═══════════════════════════════════════════\n");
+}
+
 // ── Helpers ──
 
 function assertState(requester: RequesterAgent, expected: RequesterState): void {
@@ -202,9 +318,34 @@ async function waitForState(
   console.log(`  ✓ Requester reached state: ${target}`);
 }
 
-// ── Run ──
+// Variant that accepts ERROR as the target (for negative test scenarios)
+async function waitForStateAllowError(
+  requester: RequesterAgent,
+  target: RequesterState,
+  timeoutMs: number,
+): Promise<void> {
+  const start = Date.now();
+  while (requester.getState() !== target) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(
+        `Timeout waiting for state ${target} — stuck in ${requester.getState()}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  console.log(`  ✓ Requester reached state: ${target}`);
+}
 
-runMockTest().catch((err) => {
+// ── Run all scenarios ──
+
+async function runAll(): Promise<void> {
+  await runMockTest();
+  await runTimeoutPartialTest();
+  await runTimeoutNoWorkersTest();
+  await runMaxWorkersOverrideTest();
+}
+
+runAll().catch((err) => {
   console.error("\n✗ Requester mock test failed:", err);
   process.exit(1);
 });

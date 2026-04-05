@@ -107,6 +107,7 @@ async function main(): Promise<void> {
     topicIds,
     escrowService: requesterEscrow,
     maxBidsToAccept: 2,
+    bidTimeoutMs: process.env.BID_TIMEOUT_MS ? parseInt(process.env.BID_TIMEOUT_MS, 10) : 60_000,
     onEscrowCreated: (escrowInfo) => {
       // Wire escrow info to Judge after Requester locks it
       judge.setEscrowInfo(escrowInfo.taskId, escrowInfo);
